@@ -1,0 +1,102 @@
+# 策略组定义
+#
+# 命名规范（方案 A）：单个 emoji + 简短中文，控制在 5 字以内
+#
+# 硬性约束：**凡是从「代理模式」里可以选中的组，都不能设 hidden**
+#   hidden 的组不会出现在客户端分组列表里，用户选中后找不到入口配置，
+#   形成死路。hidden 仅适用于「用户永不直接碰、仅被内部引用」的组。
+#
+# type 说明：
+#   select       手动选择
+#   url-test     自动测速选最低延迟
+#   fallback     按顺序取第一个可用
+
+core:
+  # 顶层唯一入口。日常只需要碰这一个组。
+  - name: "🧭 代理模式"
+    type: select
+    options: [auto, regions, all_nodes, failover, direct, reject]
+    note: 扁平化设计：所有可选来源直接列出，少一次点击且每项都可达
+
+  - name: "⚡ 延迟优选"
+    type: url-test
+    source: all
+    lazy: true
+    note: 按需测速——未被选中时不发起任何健康检查
+
+  - name: "🚧 故障转移"
+    type: fallback
+    source: all
+    lazy: true
+    note: 机场节点抽风时的兜底
+
+  - name: "🌍 全部节点"
+    type: select
+    source: all
+    note: 手动挑选具体节点时的入口
+
+region:
+  # 由 regions.yaml 驱动，运行时按订阅实际节点动态生成
+  template: url-test
+  lazy: true
+  note: 选地区 = 该地区内自动选最低延迟节点，无需手动挑
+  include_other: true
+  other_name: "🌐 其他地区"
+
+line_type:
+  - name: "🏠 家宽/原生线路"
+    type: select
+    matcher: residential
+  - name: "💰 低倍率节点"
+    type: select
+    matcher: lowrate
+  - name: "📢 订阅信息"
+    type: select
+    matcher: notification
+    note: 机场的流量/到期提示节点，正常不该选
+
+service:
+  # 以下各组的选项完全一致：代理模式 + 延迟优选 + 故障转移 + 全部节点来源 + DIRECT(+REJECT)
+  - name: "📁 办公通讯"
+    icon: Notion.png
+    includes_reject: true
+  - name: "🤖 AI服务"
+    icon: ChatGPT.png
+    includes_reject: true
+  - name: "🔍 谷歌服务"
+    icon: Google_Search.png
+    includes_reject: true
+  - name: "游戏平台"
+    icon: Download.png
+    includes_reject: true
+  - name: "📺 大流量通道"
+    icon: Download.png
+    includes_reject: false
+  - name: "⛔ 广告拦截"
+    icon: Advertising.png
+    fixed_options: [REJECT, DIRECT]
+    note: 固定两项，不可选其他出口
+
+network:
+  - name: "🔗 Tailscale"
+    type: select
+    fixed_options: [DIRECT, "TS-TAILSCALE"]
+    default: DIRECT
+    note: 默认关闭。切到 TS-TAILSCALE 即启用，按需连接，不切不建连
+
+default_route:
+  - name: "🛡️ 国内直连"
+    type: select
+    options: [direct, auto, regions, all_nodes, failover]
+    default: direct
+    note: 默认 DIRECT。接入 GEOIP,CN
+  - name: "🌍 兜底代理"
+    type: select
+    options: [auto, regions, all_nodes, failover, direct]
+    note: 接入 MATCH 兜底，默认走代理模式
+
+# 命名变更记录（2026-10）
+#   国内流量 → 国内直连   行为是直连，但原名「流量」与「国际流量」对称易误导
+#   国际流量 → 兜底代理   它就是 MATCH 兜底，原名暗示「国际」不准确
+#   机场通知 → 订阅信息   部分机场节点名是「机场订阅」而非通知
+#   虚幻引擎 → 游戏平台   已含 Steam / EA / PS / Switch

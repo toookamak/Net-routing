@@ -1,0 +1,21 @@
+# 节点特征匹配
+#
+# 决定节点被归入哪个「特性组」以及是否被剔除。
+
+notification:
+  comment: |
+    通知节点 —— 机场的流量/到期提示。这些节点会被排除出「全部节点」，
+    只保留在「📢 订阅信息」组里。
+    宽版本含裸的「年」「月」等单字，会误杀正常线路节点；
+    收窄版本用「年付/月付」等组合词，误杀更少。
+  broad: "自动|故障|流量|官网|套餐|机场|订阅|年|月|失联|频道|Traffic|Expire|剩余|激励|分享|到期|续费|充值"
+  strict: "自动|故障|流量|官网|套餐|机场|订阅|年付|月付|失联|频道|Traffic|Expire|剩余|激励|分享|到期|续费|充值"
+  use_strict: true
+
+residential:
+  comment: 家宽 / 原生 IP 线路
+  filter: "家宽|原生|residential|home"
+
+lowrate:
+  comment: 低倍率节点（按流量倍率计费便宜的）
+  filter: "低倍率|lowrate|低-rate|倍率"

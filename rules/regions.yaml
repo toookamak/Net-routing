@@ -1,0 +1,45 @@
+# 地区匹配定义
+#
+# 决定哪些节点被归到哪个地区组。改这里即可增删地区，无需改代码。
+#
+# ⚠️ 匹配语义（重要，勿轻易改动）：
+#   1. availableRegions 用「首个命中即停」—— 一个节点同时匹配多个地区时，
+#      归属第一个命中的地区。这决定了「该地区组是否被创建」。
+#   2. 地区组成员用「逐地区独立判定」—— 同一节点可能出现在多个地区组里。
+#   3. availableRegions 会在最后被裁剪：若某地区组最终没有成员，
+#      该地区名会从选项列表中移除，否则会引用到不存在的组（mihomo 报 loop）。
+#
+# 正则一律不区分大小写。加 g 标志会破坏 test() 的状态，不要加。
+
+- code: HK
+  name: "🇭🇰 香港"
+  icon: Hong_Kong.png
+  filter: "香港|HK|Hong Kong|🇭🇰"
+
+- code: SG
+  name: "🇸🇬 新加坡"
+  icon: Singapore.png
+  filter: "新加坡|狮城|SG|Singapore|🇸🇬"
+
+- code: JP
+  name: "🇯🇵 日本"
+  icon: Japan.png
+  filter: "日本|JP|Japan|🇯🇵"
+
+- code: US
+  name: "🇺🇸 美国"
+  icon: United_States.png
+  filter: "美国|US|USA|United States|America|🇺🇸"
+
+# 常见可选补充（需要时取消注释）
+# - code: KR
+#   name: "🇰🇷 韩国"
+#   icon: Korea.png
+#   filter: "韩国|KR|Korea|首尔|🇰🇷"
+#
+# - code: TW
+#   name: "🇹🇼 台湾"
+#   icon: Taiwan.png
+#   filter: "台湾|台|TW|Taiwan|🇹🇼"
+#
+# ⚠️ 加地区前请注意：节点名里含「台」的单字会误伤大量非台湾节点

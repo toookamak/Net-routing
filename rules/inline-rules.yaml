@@ -1,0 +1,30 @@
+# 内嵌规则集
+#
+# 这些规则直接写进最终配置（type: inline），不依赖任何外部 URL。
+# 适合域名稳定、且外部源不可靠的规则 —— 例如自建仓库可能被删除或转私有。
+#
+# 格式：一行一条完整规则，与 rule-provider 中的条目语法一致。
+
+
+# 官方源
+  - "DOMAIN,registry.npmjs.org"
+  - "DOMAIN,auth.docker.io"
+
+# 国内镜像源
+  - "DOMAIN,registry.npmmirror.com"
+  - "DOMAIN,registry.npm.taobao.org"
+  - "DOMAIN-SUFFIX,npmmirror.com"
+  - "DOMAIN-SUFFIX,cnpmjs.org"
+  - "DOMAIN-SUFFIX,npm.taobao.org"
+
+# 其它前端包源
+  - "DOMAIN,registry.yarnpkg.com"
+  - "DOMAIN-SUFFIX,yarnpkg.com"
+  - "DOMAIN,registry.bower.io"
+
+# Node.js 发行版与文档（npm i -g 会下载二进制）
+  - "DOMAIN-SUFFIX,nodejs.org"
+  - "DOMAIN-SUFFIX,nodejs.com"
+  - "DOMAIN-SUFFIX,nodejs.dev"
+  - "DOMAIN-SUFFIX,nodejs.cn"
+  - "DOMAIN-KEYWORD,nodejs"

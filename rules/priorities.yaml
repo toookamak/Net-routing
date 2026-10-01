@@ -1,0 +1,111 @@
+# 规则顺序与目标组
+#
+# mihomo 规则从上到下匹配，命中即停，**顺序即优先级**。
+# 下面这个顺序是整个配置里最需要小心的部分。
+#
+# 关键约束：
+#   1. UnBan / Direct 必须排在所有 REJECT 规则之前，否则白名单形同虚设
+#   2. Tailscale 必须排在 GEOSITE,cn 与 GEOIP,CN 之前，
+#      否则内网 IP 会被「国内直连」或兜底规则先抢走
+#   3. GEOIP,CN 与 MATCH 必须留在最后两条
+
+- id: unban
+  comment: 免拦截白名单 + 全球直连修正。必须最先。
+  group: DIRECT
+  rules:
+    - UnBan
+    - DirectNoResolve
+
+- id: adblock
+  comment: 广告拦截。放在直连修正之后。
+  group: "⛔ 广告拦截"
+  rules:
+    - Reject_no_ip
+    - Reject_domainset
+    - Reject_no_ip_drop
+    - Reject_no_ip_no_drop
+    - Reject_ip
+    - CustomRejectRules
+
+- id: tailscale
+  comment: Tailscale 内网。必须早于 GEOSITE,cn 与 GEOIP,CN。
+  group: "🔗 Tailscale"
+  rules:
+    - "IP-CIDR,100.64.0.0/10,no-resolve"
+    - "IP-CIDR,100.100.100.100/32,no-resolve"
+    - "DOMAIN-SUFFIX,ts.net"
+
+- id: direct
+  comment: 私有网络 + 国内备案 CDN + 国内直连
+  group: DIRECT
+  rules:
+    - "GEOSITE,private"
+    - "GEOIP,private,no-resolve"
+    - MicrosoftCNCDN_no_ip
+    - AppleCNCDN_no_ip
+    - "GEOSITE,cn"
+    - Lan_ip
+    - SteamCN_ip
+    - Domestic_no_ip
+
+- id: traffic
+  comment: 应用级规则（按进程名匹配）
+  group: "📺 大流量通道"
+  rules: [applications]
+
+- id: custom-direct
+  comment: 用户自定义直连，锁死 DIRECT，不建组
+  rules:
+    - provider: CustomDirectRules
+      group: DIRECT
+
+- id: office
+  comment: 办公通讯 + 微软 + 开发工具链（Docker / npm）+ 自定义代理
+  group: "📁 办公通讯"
+  rules:
+    - Figma_ip
+    - Notion_ip
+    - Github
+    - OneDrive
+    - Dropbox
+    - Telegram_ip
+    - Telegram_no_ip
+    - Microsoft_no_ip
+    - Docker
+    - Npm
+    - provider: CustomProxyRules
+      group: "📁 办公通讯"
+
+- id: ai
+  group: "🤖 AI服务"
+  rules: [OpenAI, AI_no_ip, Gemini]
+
+- id: google
+  group: "🔍 谷歌服务"
+  rules: [YouTube, GoogleFCM_ip, Google, GoogleFCM_no_ip]
+
+- id: cdn
+  comment: 下载 / CDN / 流媒体大流量
+  group: "📺 大流量通道"
+  rules:
+    - MicrosoftCDN_no_ip
+    - CDN_domainset
+    - CDN_no_ip
+    - Download_domainset
+    - Download_no_ip
+    - GameDownload
+    - Stream_ip
+
+- id: game
+  group: "游戏平台"
+  rules: [UnrealRules, Steam, Origin, Sony, Nintendo]
+
+- id: geoip
+  comment: 国内 IP 兜底
+  group: "🛡️ 国内直连"
+  rules: ["GEOIP,CN"]
+
+- id: final
+  comment: 兜底
+  group: "🌍 兜底代理"
+  rules: [MATCH]
