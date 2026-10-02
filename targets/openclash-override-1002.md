@@ -1,58 +1,98 @@
 # openclash-override-1002.conf —— 功能与规则说明
 
-> 本文与 [`openclash-override-1002.conf`](./openclash-override-1002.conf)、
-> [`openclash-groups-1002.sh`](./openclash-groups-1002.sh) 同级配套，
+> 本文是 [`openclash-override-1002.conf`](./openclash-override-1002.conf) 的配套说明，
 > 描述路由器侧覆写**做了什么**、**产出什么配置**、以及**改的时候该动哪里**。
+> **自 v1.2.0 起它是单文件方案** —— 历史上曾拆成 `.conf` + `.sh` 两个文件，
+> 那条路已废弃，原因见第 〇之前 节。
 >
-> **文件大版本：1002（2026-10-02 立项）** ｜ **内容版本：v1.1.0** ｜ **规模：51 条分流规则 / 43 个规则集 / 22 个策略组**
+> **文件大版本：1002（2026-10-02 立项）** ｜ **内容版本：v1.3.0** ｜ **规模：51 条分流规则 / 43 个规则集 / 22 个策略组**
 
 ---
 
-## 〇之前、部署架构：两个文件各管一段
+## 〇之前、部署架构：单文件，策略组也在里面
 
-⚠️ **策略组不在 `.conf` 里**，拆成了两个文件。这是实测踩坑后的决定，不是设计偏好。
-
-| 文件 | 部署到 | 负责 | 为什么 |
-|---|---|---|---|
-| `openclash-override-1002.conf` | 覆写模块（上传） | `rules!` / `rule-providers` / `dns` / 顶层键 / `[General]` 开关 | 这几项在覆写模块里**实测正常** |
-| `openclash-groups-1002.sh` | `/etc/openclash/custom/openclash_custom_overwrite.sh` | **仅 `proxy-groups`** | 覆写模块的解析器会吃掉 `filter` |
-
-### 为什么策略组必须拆出去（2026-10-02 实测）
-
-覆写模块的 `[YAML]` 块在处理 `proxy-groups!`（数组套对象整体替换）时，
-**会把元素内「值里含竖线 `|`」的键整行丢掉**：
-
-| 组 | 合并后剩余的键 | 结果 |
-|---|---|---|
-| `⚡ 延迟优选` | `type, include-all-proxies, empty-fallback, url, interval, tolerance, lazy` | `exclude-filter` 消失 |
-| `🇭🇰 香港` | `type, include-all-proxies, empty-fallback, url, interval, tolerance, lazy` | `filter` 消失 |
-| `💰 低倍率节点` | `type, include-all-proxies, empty-fallback` | `filter` 消失 |
-
-**活下来的键值里都没有 `|`，死掉的值里全是 `|`。** `|` 是 YAML 的块标量指示符，
-OpenClash 那个块的解析器是逐行处理的，不是完整 YAML 解析器。
-
-症状：面板上每个组的候选池都是全部节点（实测 `31/51`），地区组的 url-test
-在全部节点里挑最快，**「选香港」选出来的是新加坡节点**。
-
-`rules!` 里的规则不含 `|`，所以 51 条规则全部正常 —— 这也反过来印证了原因。
-
-> **绕法 A 走不通。** 把 `|` 换成 `\n` 让 mihomo 按多行拆多个正则？
-> 不行 —— 同一个解析器不处理引号内的转义序列，`\n` 会原样传下去，
-> mihomo 收到的是字面反斜杠 n。
->
-> 所以只能让策略组走 Psych 直接读写 YAML，绕开那个解析器。
-
-### 执行顺序
+**只有一个文件**：`openclash-override-1002.conf`，通过覆写模块上传，
+全部 22 个策略组都在它的 `[YAML]` 块里。
 
 ```
-① yml_change.sh          端口/模式/TUN/DNS/Sniffer/认证（来自 UCI）
-② yml_rules_change.sh    规则注入、自定义规则、GitHub CDN 重写
-③ /tmp/yaml_overwrite.sh ← 覆写模块 .conf 编译产物（rules/providers/dns）
-④ openclash_custom_overwrite.sh ← .sh 脚本（proxy-groups）
+① yml_change.sh        端口/模式/TUN/DNS/Sniffer/认证（来自 UCI）
+② yml_rules_change.sh  规则注入、自定义规则、GitHub CDN 重写
+③ /tmp/yaml_overwrite.sh  ← 覆写模块编译产物：rules / rule-providers / dns / 22 个策略组
+④ openclash_custom_overwrite.sh  ← 原厂模板，6 条有效语句全是环境与日志，实为空操作
 启动内核
 ```
 
-`④` 在 `③` 之后，两边不重叠，各管各的。
+### ⚠️⚠️ 写 `filter` 的硬约束：单引号、一个正则、不能有 `|`
+
+**这是本产物最容易再踩一次的坑，2026-10-02 花了半天定位。**
+
+OpenClash **0.47.156** 拼 `[YAML]` 块时逐行执行这一行：
+
+```sh
+yaml_content="${yaml_content}$(eval "echo \"$line\"")"$'\n'
+```
+
+行里的**双引号会提前闭合 shell 的引号**，后面的 `|` 于是变成**管道运算符**，
+`echo` 的输出被灌进管道，命令替换拿到**空串** —— **整行被静默删除**。
+路由器上直接复现：
+
+```sh
+line='    filter: "HK|Hong Kong|abc"'
+eval "echo \"$line\""        # → 空字符串
+```
+
+后果极其隐蔽：**日志里没有任何报错**，组照样在，只有 `filter` 键凭空消失，
+所有地区组退化成「全部节点」—— **「选香港」会连到新加坡**。
+
+对照数据：整个 `[YAML]` 块里含 `|` 的**非注释行正好 13 行**，
+也正好是这 13 个 `filter` / `exclude-filter` 键消失，其它键一个没少。
+
+**规避办法：值一律用单引号，且一个组只给一个正则。**
+单引号在 shell 双引号串里是字面量，能原样通过这行（已实测）。
+
+| 组 | 键与写法 | 命中（2026-10-02，51 节点） |
+|---|---|---|
+| 🇭🇰 香港 | `filter: '香港'` | 5 |
+| 🇸🇬 新加坡 | `filter: '新加坡'` | 12 |
+| 🇯🇵 日本 | `filter: '日本'` | 15 |
+| 🇺🇸 美国 | `filter: '美国'` | 12 |
+| 🇬🇧 英国 | `filter: '英国'` | 4 |
+| 🇹🇼 台湾 | `filter: '台湾'` | 1 |
+| 🏠 家宽/原生线路 | `filter: '家宽'` | 0 → 空组，落 `empty-fallback: DIRECT` |
+| 💰 低倍率节点 | `filter: '[0-9]x'` | 18（`0.5x` / `0.1x` / `0.01x`，不误伤） |
+| 📺 流媒体节点 | `filter: '流媒体'` | 18 |
+| 📢 订阅信息 | `filter: '：'` | 2 |
+| ⚡ 延迟优选 / 🚧 故障转移 / 🌍 全部节点 | `exclude-filter: '：'` | 剔掉那 2 个通知节点 |
+
+`'：'`（全角冒号）是机场通知节点 `剩余流量：917.91 GB` / `套餐到期：长期有效`
+的共同特征，真实线路节点用的是半角 `|`，所以不会误伤。
+
+**代价**：一个组只能一个模式，**换订阅必须重新核对命中率**。
+
+`rules/regions.yaml`、`rules/filters.yaml` 和 `targets/flclash-override-1001.js`
+**仍保留完整的 `|` alternation** —— 那边 mihomo 直接吃 YAML，没有这个 `eval`。
+这是两端产物**有意**的分叉，不要「顺手统一」。
+
+### 曾经的两条弯路（都已排除，勿再尝试）
+
+| 尝试 | 结果 |
+|---|---|
+| 拆成两个文件，策略组改走 `openclash_custom_overwrite.sh` | 上线后分组全部消失、网络不可用（2026-10-02 事故，已回滚） |
+| 把 `\|` 换成 `\n`，让 mihomo 按多行拆多个正则 | 行本身会先被 `eval` 吃掉，`\n` 到不了 mihomo |
+| 用 `[Overwrite]` 段的 `ruby_cover` 从独立文件读策略组 | 0.47.156 的 `YAML.rb` 里没有这个方法，不可用 |
+
+### 0.47.156 与 GitHub `dev` 分支不是同一份代码
+
+排查时**不要拿 GitHub `dev` 分支的源码推断线上行为**。`dev` 已重写成
+`YAML.overwrite_run` + fragment 文件，0.47.156 没打包进去：
+
+```sh
+grep -n 'def self\.' /usr/share/openclash/YAML.rb
+# 线上只有 24 个 def self.，没有 overwrite_run / overwrite_parse_line / ruby_cover
+```
+
+`dev` 分支里 `YAML.overwrite()` 确实是 Psych 完整解析、`|` 安全 —— 这一点没错，
+但它**不参与** 0.47.156 的抽取环节。**丢行发生在拼 YAML 块那行 shell，不在合并层。**
 
 ---
 
@@ -70,8 +110,11 @@ openclash-override-1002.conf
 | 换规则集源、改顺序、改参数、修 bug | **直接改 `openclash-override-1002.conf`，文件名不变** |
 | 重大结构调整（策略组结构重做、规则链整体重排） | 以**当天日期**另存为新大版本文件 |
 
-> 文件头部的 `内容版本：v1.1.0` 是**内容版本**（每次有实质改动就递增），
+> 文件头部的 `内容版本：v1.3.0` 是**内容版本**（每次有实质改动就递增），
 > 与文件名的大版本是两回事，不要混用。
+> **改动内容时必须同步递增它** —— 路由器上无法用 git 查部署的是哪一版，
+> 只能靠这个号人工比对（覆写模块编辑框第一屏可见，
+> 也可 `grep -n 'net-routing artifact' /tmp/yaml_overwrite.sh`）。
 
 ---
 
@@ -182,7 +225,10 @@ targets/openclash-override-1002.conf  ← 本文件描述的对象（产物，�
 
 ## 三、策略组清单（22 个）
 
-全部用 `include-all-proxies: true` + `filter` 正则声明，**组内不含任何节点名**，换订阅依然成立。
+全部用 `include-all-proxies: true` + `filter` 正则声明，**组内不含任何节点名**。
+
+> ⚠️ 这里的正则都是**单引号 + 单个正则**，不能写 `|` 交替 —— 原因见第 〇之前 节。
+> 写 `filter` 前先读那一节，否则会重蹈 2026-10-02 的覆辙。
 
 ### 核心路由
 
@@ -195,20 +241,27 @@ targets/openclash-override-1002.conf  ← 本文件描述的对象（产物，�
 
 ### 地区组（url-test，选地区 = 该地区内延迟最低）
 
-| 组名 | 正则来源 | 备注 |
-|---|---|---|
-| 🇭🇰 香港 / 🇸🇬 新加坡 / 🇯🇵 日本 / 🇺🇸 美国 | `rules/regions.yaml` | 原有 |
-| 🇬🇧 英国 | `英国\|UK\|United Kingdom\|伦敦\|🇬🇧` | 2026-10-02 补入 |
-| 🇹🇼 台湾 | `台湾\|台灣\|Taiwan\|🇹🇼` | 2026-10-02 补入。**不用单字「台」**（会误伤）；部分机场用 🇨🇳 标台湾，靠「台湾」双字命中 |
+| 组名 | 正则 | 命中 | 备注 |
+|---|---|---|---|
+| 🇭🇰 香港 | `'香港'` | 5 | |
+| 🇸🇬 新加坡 | `'新加坡'` | 12 | |
+| 🇯🇵 日本 | `'日本'` | 15 | |
+| 🇺🇸 美国 | `'美国'` | 12 | |
+| 🇬🇧 英国 | `'英国'` | 4 | 2026-10-02 补入 |
+| 🇹🇼 台湾 | `'台湾'` | 1 | 2026-10-02 补入。**不用单字「台」**（会误伤）；该节点名是 `🇨🇳台湾专线01`，靠「台湾」双字命中 |
+
+> 原先写的是 `英国|UK|United Kingdom|伦敦|🇬🇧` 这类多关键词交替。
+> 受 `|` 限制改成单个关键词后**英文命名的节点会漏**（本订阅全中文命名所以无影响）。
+> 换订阅后若发现某地区组是空的或混入别国节点，**先回来改这里**。
 
 ### 线路特性
 
 | 组名 | 类型 | 生成条件 |
 |---|---|---|
-| 🏠 家宽/原生线路 | `select` | 存在家宽节点（当前订阅为 0，走 `empty-fallback` 落 DIRECT） |
-| 💰 低倍率节点 | `select` | `低倍率\|lowrate\|低-rate\|倍率\|0\.\d+x\|[0-9]+倍` → 18 个 |
-| 📺 流媒体节点 | `select` | `流媒体\|解锁\|Netflix\|Disney\|IPLC\|IEPL` → 18 个 |
-| 📢 订阅信息 | `select` | 机场的流量/到期提示节点，正常不该选 |
+| 🏠 家宽/原生线路 | `select` | `'家宽'` → 当前订阅 0 个，走 `empty-fallback` 落 DIRECT |
+| 💰 低倍率节点 | `select` | `'[0-9]x'` → 18 个（`0.5x` / `0.1x` / `0.01x`） |
+| 📺 流媒体节点 | `select` | `'流媒体'` → 18 个 |
+| 📢 订阅信息 | `select` | `'：'` → 2 个通知节点，正常不该选 |
 
 ### 服务组
 
@@ -420,7 +473,46 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 
 症状统一是「订阅更新成功、面板一切正常、但某类流量分流不生效」。这是最难自查的一类故障。
 
-> `AppleCNCDN_no_ip` 是唯一用 `behavior: domain` 的条目（纯域名集，更快）。
+**本项目踩过的实例（2026-10-02 已修）**：`Reject_domainset` / `CDN_domainset` /
+`Download_domainset` 三个上游文件用的是 **`+.域名` 简写**（Surge/HomeDNS 风格），
+零条带逗号，却被声明成 `behavior: classical`。mihomo 的 classical 解析器要求每行
+`TYPE,PAYLOAD`：
+
+```go
+if tp != "MATCH" && payload == "" {
+    return nil, fmt.Errorf("missing subsequent parameters: %s", tp)
+}
+```
+
+于是**整份规则集被丢弃**（不是部分失效）：
+
+| 规则集 | payload 条数 | 其中 `+.` 格式 | 修复前 | 修复后 |
+|---|---|---|---|---|
+| `Reject_domainset` | 109,004 | 108,241 | **0** | 109,004 |
+| `CDN_domainset` | 2,633 | 805 | **0** | 2,633 |
+| `Download_domainset` | 610 | 402 | **0** | 610 |
+
+`+.域名` **是合法的 mihomo 写法**，但只对 `behavior: domain` 生效 ——
+`component/trie/domain.go` 的 `ValidAndSplitDomain` 明确接受它
+（`complexWildcard "+"` 只能作为多段域名的首个完整 label），
+且 `DomainSetBuilder.Insert` 会同时插入后缀与全匹配两条。
+同一个列表里的 `AppleCNCDN_no_ip` 本来就是 `behavior: domain`。
+
+**自查命令**（日志会刷屏十万条，count 才是关键）：
+
+```sh
+grep -c 'parse classical rule' /tmp/openclash.log
+```
+
+**校验命令**（更可靠，直接问内核要每份规则集的实际载入条数）：
+
+```sh
+S=$(ruby -ryaml -e 'print YAML.load_file("/etc/openclash/良心云.yaml")["secret"].to_s')
+curl -s -H "Authorization: Bearer $S" http://127.0.0.1:9090/providers/rules > /tmp/p.json
+ruby -ryaml -e 'j=YAML.load(File.read("/tmp/p.json")); (j["providers"]||{}).each{|k,v| puts format("  %-22s %-9s %s", k, v["behavior"], v["ruleCount"]) }'
+```
+
+> 改规则集源后**先跑这条**。`ruleCount` 是 0 就说明这份是空载的，面板上看不出来。
 
 ### 自托管规则集
 
@@ -533,6 +625,22 @@ cat /tmp/yaml_overwrite.sh
 grep -iE 'overwrite|error|fail' /tmp/openclash.log | tail -30
 ```
 
+覆写模块处理成功时会打这几行，**是判断「模块到底有没有跑」的唯一依据**：
+
+```
+[Tip] Processing Overwrite Module【openclash-override-1002.conf】
+[Tip] Load YAML Override Block【YAML Block => openclash-override-1002.conf】
+[Tip] Load Overwrite Script【core_type => 'Meta'】
+```
+
+> ⚠️ **`/tmp/openclash.log` 会被 watchdog 清空。** 出现过
+> `[Watchdog] Log Size Limit, Clean Up All Log Records`，之后整个文件只剩流量日志，
+> 启动阶段那几十行全没了。**「日志里搜不到 X」不能推出「X 没执行」** ——
+> 2026-10-02 就因此误判过一次。要抓启动过程必须重启前先挂好 `tail -F`。
+>
+> 还要注意 `/tmp/yaml_overwrite.sh` 用完即删（`rm -rf /tmp/yaml_*`），
+> 事后看不到编译产物，要看只能在重启过程中抓。
+
 ### 验证最终配置
 
 ```sh
@@ -549,13 +657,35 @@ ruby -ryaml -e 'd=YAML.load_file(ARGV[0]);
 
 `fallback` 应为 `nil`（已删）。`rule-providers` 应为 43 + 1（OpenClash 的 `oc-cn-domain`）= 44。
 
+### 校验策略组有没有被正确筛（本次事故的直接验入口）
+
+```sh
+ruby -ryaml -e 'd=YAML.load_file(ARGV[0]);
+  (d["proxy-groups"]||[]).each{|g|
+    v=g["filter"]||g["exclude-filter"]
+    puts format("  %-16s %s", g["name"].to_s, v ? v : "（无筛选 ← 不对）")}' /etc/openclash/良心云.yaml
+```
+
+**预期：13 个组有筛选值，其余 9 个用显式 `proxies:` 列表所以本来就该没有。**
+出现「（无筛选 ← 不对）」就是踩了第 〇之前 节那个坑。
+
+面板上更直接的信号：地区组应显示 `5/51`、`12/51` 这种数；
+**全部显示 `35/51` 且各地区组选中的都是同一个节点，就是筛选没生效。**
+
 ### 手动校验配置合法性
 
 ```sh
-/etc/openclash/core/clash_meta -t -d /etc/openclash -f /etc/openclash/良心云.yaml
+SAFE_PATHS=/etc/openclash:/usr/share/openclash \
+  /etc/openclash/core/clash_meta -t -d /etc/openclash -f /etc/openclash/良心云.yaml
 ```
 
-> `-d /etc/openclash` 不能省 —— 不带 home 目录找不到已下载的 geo 库，会误报失败。
+> **两个参数都不能省。**
+> - `-d /etc/openclash`：不带 home 目录找不到已下载的 geo 库，会误报失败
+> - `SAFE_PATHS`：OpenClash 写的 `external-ui: /usr/share/openclash/ui` 在 home 目录之外，
+>   不给 `SAFE_PATHS` 会报 `path is not subpath of home directory or SAFE_PATHS`，
+>   **连线上那份配置自己都过不了**，容易被误判成「我这份配置有问题」
+
+预期结尾：`configuration file ... test is successful`，退出码 0。
 
 ---
 
@@ -640,6 +770,57 @@ flclash 版把家宽/低倍率节点排除出所有地区组（见 `docs/design.
 （`https://cdn.jsdelivr.net/` 等）。OpenClash 的 `yml_rules_change.sh` 会自动把
 `raw.githubusercontent.com` 开头的 URL 重写成 CDN 地址。
 
+### 6. `filter` 只能是单正则，换订阅必须重核命中率
+
+受第 〇之前 节那个 `eval` 限制，13 个 `filter` / `exclude-filter` 都写成了单个正则。
+本订阅全中文命名所以命中正常（实测香港 5 / 新加坡 12 / 日本 15 / 美国 12 / 英国 4 / 台湾 1）。
+
+**换机场后必查**：某地区组变空、或混入别国节点、或 💰 低倍率 / 📺 流媒体 组变得不合理，
+都是单正则不再匹配的表现。校验命令见第七节「校验策略组有没有被正确筛」。
+
+### 7. 覆写模块是从 GitHub 仓库拉取的，`git push` 等于一次生产部署
+
+本模块在 LuCI 里注册为 `type='http'`，URL 指向
+`https://raw.githubusercontent.com/toookamak/Net-routing/refs/heads/main/targets/openclash-override-1002.conf`，
+并注册了 `0 2 * * *` 的定时任务（可在 `/etc/crontabs/root` 里看到）：
+
+```
+0 2 * * * source /usr/share/openclash/openclash_curl.sh && DOWNLOAD_FILE_CURL "https://raw.githubusercontent.com/toookamak/Net-routing/.../openclash-override-1002.conf" "/etc/openclash/overwrite/openclash-override-1002.conf" ...
+```
+
+**含义**：main 分支上这个文件的内容，每天凌晨 2 点会被推到路由器。
+2026-10-02 事故当天它在仓库里 90 分钟内换了 6 个版本 —— 这种节奏配上自动拉取很危险。
+
+**已处置**（2026-10-02）：把该模块的「自动更新」关掉，改为**人工确认后手动上传 + 重启**。
+LuCI 路径：服务 → OpenClash → 覆写模块 → 编辑该模块 → 自动更新设为「关闭」。
+
+> 顺带：`/etc/openclash/overwrite/sh` 那个模块的 URL 已 404
+> （`targets/openclash-override-1002.sh` 在回滚时删了），它目前 `enable='0'` 所以无害，
+> **建议直接删掉这个条目**，别留一个可能误开的 404 源。
+
+### 8. `fallback-filter-:` 删键不生效
+
+`[YAML]` 块里写了 `fallback-:` 和 `fallback-filter-:` 两行删键。
+实测 `fallback` 删掉了，`fallback-filter` **仍在**（`YAML.rb` 的 `delete_from_hash`
+对 `nil` 值的处理问题）。
+
+**不致命**：没有 `fallback` 时 `fallback-filter` 不会起作用，符合本项目的意图。
+知道有这行残留即可，别误判成「删键机制坏了」。
+
+### 9. 查问题前先确认你读的是线上那份代码
+
+GitHub `dev` 分支的 `YAML.rb` 已经重写（`overwrite_run` + fragment 文件），
+0.47.156 没打包进去。两者行为不同，见第 〇之前 节。
+
+排查任何「覆写为什么不生效」之前，先在路由器上跑：
+
+```sh
+grep -n 'def self\.' /usr/share/openclash/YAML.rb
+grep -n 'yaml_content=' /etc/init.d/openclash
+```
+
+看到的是**实际在跑的代码**，比任何文档都可靠。
+
 ---
 
 ## 十、常见调整入口
@@ -647,13 +828,14 @@ flclash 版把家宽/低倍率节点排除出所有地区组（见 `docs/design.
 | 想改什么 | 改哪里 | 需要重新渲染产物？ |
 |---|---|---|
 | 加一条自己的分流规则 | `rulesets/Own*.yaml` | **不用** —— 提交推送后内核按 24h 间隔自动拉取 |
-| 换规则集源 / 改格式 / 改间隔 | `rules/providers.yaml` | ✅ |
+| 换规则集源 / 改格式 / 改间隔 / 改 `behavior` | `rules/providers.yaml` | ✅ |
 | 调整规则顺序 / 改分流目标 | `rules/priorities.yaml` | ✅ |
 | 增删策略组、改组名 | `rules/groups.yaml` | ✅ |
-| 增删地区、改地区正则 | `rules/regions.yaml` | ✅ |
-| 改通知/家宽/低倍率/流媒体关键词 | `rules/filters.yaml` | ✅ |
+| 增删地区、改地区正则 | `rules/regions.yaml` | ✅ **但产物里要写成单正则**（见第 〇之前 节） |
+| 改通知/家宽/低倍率/流媒体关键词 | `rules/filters.yaml` | ✅ 同上 |
 | 改 DNS（DoH 源、policy、fake-ip-filter） | `[YAML]` 块的 `dns:` | ✅ |
 | 改合并语义 | `[YAML]` 块里的键名后缀（`!` / `+` / `-`） | ✅ |
+| 改完记得 | **递增第 15 行 `内容版本`** | —— |
 
 **两类改动的区别很重要**：
 

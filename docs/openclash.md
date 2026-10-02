@@ -231,9 +231,13 @@ LuCI 页面：服务 → OpenClash → 覆写设置
 
 ### ❌ 三选一：规则注入只能用一种机制
 
-`openclash_custom_rules.list`（插顶）+ `_2.list`（插 MATCH 前）+ `openclash_custom_overwrite.sh`（整体替换 `rules`）
+`openclash_custom_rules.list`（插顶）+ `_2.list`（插 MATCH 前）+ 覆写模块的 `rules!:`
 **三者同时启用会产生未定义的插入顺序。**
-本项目的决定：**只用 `openclash_custom_overwrite.sh` 整体替换 `rules`**，另两个保持关闭。
+
+本项目的决定：**只用覆写模块的 `rules!:` 整体替换 `rules`**，另两个保持关闭
+（`enable_custom_clash_rules = 0`）。`openclash_custom_overwrite.sh` 保持**原厂模板不动**
+（实测它只有 6 条有效语句：source 三个库、打日志、`exit 0`，对配置零影响）。
+
 好处：规则链是确定的一整段，可完整 review；坏处：不能再用 LuCI 界面临时加规则。
 
 ---
@@ -425,9 +429,98 @@ configuration file ... test failed
 > 那边的「家宽/低倍率不进地区组」是继承自原单文件脚本的既有行为（见 `docs/design.md` 第七节已知问题 2），
 > 在本订阅上会导致 3 个地区组消失。两端产物允许在这一点上分叉，各自求最优。
 
+### 12. ⭐⭐ `[YAML]` 块里带 `|` 的行会被**静默删除**（2026-10-02 定位）
+
+**这是本机最隐蔽的一个坑，日志无任何报错。**
+
+现象：22 个策略组都在，但 `filter` / `exclude-filter` 键**凭空消失**，
+地区组退化成「全部节点」，面板上 `35/51`，🇭🇰🇯🇵🇺🇸🇬🇧🇹🇼 六个地区组选中的都是同一个新加坡节点。
+**「选香港」会连到新加坡。**
+
+根因在 **init.d 拼 YAML 块那一行 shell**（`/etc/init.d/openclash` 的 `overwrite_file()`）：
+
+```sh
+yaml_content="${yaml_content}$(eval "echo \"$line\"")"$'\n'
+```
+
+行里的 `"` 提前闭合 shell 引号 → 后面的 `|` 变成**管道运算符** →
+`echo` 输出被灌进管道 → 命令替换拿到**空串** → **整行蒸发**。路由器上直接复现：
+
+```sh
+line='    filter: "HK|Hong Kong|abc"'
+eval "echo \"$line\""        # → 空
+```
+
+对照数据：整个 `[YAML]` 块含 `|` 的非注释行**正好 13 行**，
+也正好是 13 个 `filter`/`exclude-filter` 键消失，其它键一个没少。
+
+**规避**：值一律**单引号**（shell 双引号串里是字面量，能原样通过），
+且**一个组只给一个正则**。单正则方案与实测命中见 `targets/openclash-override-1002.md` 第 〇之前 节。
+
+> ⚠️ **不要用 GitHub `dev` 分支的 `YAML.rb` 推断线上行为。** `dev` 已重写为
+> `overwrite_run` + fragment 文件，0.47.156 没打包进去：
+> ```sh
+> grep -n 'def self\.' /usr/share/openclash/YAML.rb   # 线上 24 个方法，没有 overwrite_run
+> ```
+> **合并层是 Psych 完整解析（`|` 安全）没错，但丢行发生在更早的抽取层。**
+
+### 13. `/tmp/openclash.log` 会被 watchdog 清空
+
+出现过 `[Watchdog] Log Size Limit, Clean Up All Log Records`，之后文件里只剩流量日志，
+启动阶段的几十行全没了。**「日志里搜不到 X」不能推出「X 没执行」** ——
+2026-10-02 因此误判过一次「模块没被处理」。
+
+同理 `/tmp/yaml_overwrite.sh` 用完即删（`rm -rf /tmp/yaml_*`），
+事后看不到编译产物。**要抓启动过程必须重启前先挂 `tail -F`。**
+
+### 14. `clash_meta -t` 在本机会误报失败
+
+```
+path is not subpath of home directory or SAFE_PATHS: /usr/share/openclash/ui
+allowed paths: [/etc/openclash]
+```
+
+OpenClash 写的 `external-ui: /usr/share/openclash/ui` 在 home 目录之外。
+**连线上那份配置自己都过不了 `-t`**，极易被误判成「我改坏了」。
+
+正确用法：
+
+```sh
+SAFE_PATHS=/etc/openclash:/usr/share/openclash \
+  /etc/openclash/core/clash_meta -t -d /etc/openclash -f /etc/openclash/良心云.yaml
+```
+
+### 15. 覆写模块是从 GitHub 仓库拉取的 —— `git push` = 一次生产部署
+
+本模块注册为 `type='http'`，URL 指向仓库里的本文件，并自带 `0 2 * * *` 的定时任务
+（`/etc/crontabs/root` 可见）。**main 上这个文件的内容每天凌晨 2 点被推到路由器。**
+
+2026-10-02 该文件在仓库里 90 分钟内换了 6 个版本，这种节奏配自动拉取极易出事故。
+**已处置**：关掉自动更新，改为人工确认后手动上传 + 重启。
+
+### 16. `behavior: classical` 配 `+.域名` 简写 = 整份规则集空载（已修）
+
+`Reject_domainset` / `CDN_domainset` / `Download_domainset` 三个上游用 `+.域名` 简写
+（Surge 风格，零条带逗号），声明成 `behavior: classical` → mihomo 逐行解析失败 →
+**10.9 万 + 2.6 千 + 6 百条规则全部被丢弃**，日志刷屏十万条
+`parse classical rule ... missing subsequent parameters`。
+
+`+.域名` 是**合法的** mihomo 写法，但只对 `behavior: domain` 生效
+（`component/trie/domain.go` 的 `ValidAndSplitDomain` 明确接受）。
+
+**已改为 `behavior: domain`，实测 `ruleCount` 恢复 109004 / 2633 / 610。**
+
+自查（比日志可靠，直接问内核要条数）：
+
+```sh
+S=$(ruby -ryaml -e 'print YAML.load_file("/etc/openclash/良心云.yaml")["secret"].to_s')
+curl -s -H "Authorization: Bearer $S" http://127.0.0.1:9090/providers/rules > /tmp/p.json
+ruby -ryaml -e 'j=YAML.load(File.read("/tmp/p.json")); (j["providers"]||{}).each{|k,v| puts format("  %-22s %-9s %s", k, v["behavior"], v["ruleCount"]) }'
+```
+
 ---
 
-## 六、架构：为什么用「静态文档 + 极简合并脚本」
+## 六、架构：单文件覆写 + 静态声明
 
 因为策略组改用 `include-all-proxies` + `filter` 之后，
 **本项目贡献给路由器的所有内容都不含任何节点名**：
@@ -440,18 +533,22 @@ configuration file ... test failed
 | 基础项 `unified-delay` / `tcp-concurrent` | ❌ 不依赖 |
 | `proxies` | ✅ 依赖 —— 但我们不碰 |
 
-于是可以拆成：
+于是全部内容可以是**一份静态声明**，由覆写模块的 INI 文件承载：
 
 ```
-PC 侧：rules/*.yaml ──(渲染)──▶ openclash-routes.yaml     ← 静态、可 diff、可 review
-                                              │
-                                   scp 到路由器 /etc/openclash/custom/
-                                              ↓
-路由器侧：openclash_custom_overwrite.sh        ← 只做「读 YAML → 合并几段 → 写回」
+PC 侧：rules/*.yaml ──(渲染)──▶ targets/openclash-override-1002.conf
+                                                    │
+                                      上传到覆写模块（唯一一个部署物）
+                                                    ↓
+路由器侧：OpenClash 编译成 /tmp/yaml_overwrite.sh → 合并进运行配置
 ```
 
-**合并脚本的复杂度被压到最低** —— 它不需要分类、不需要正则、不需要动态建组。
-这既满足「通用、不针对某一个订阅」的要求，也把「写坏导致断网」的风险压到最小。
+**路由器侧不需要写任何脚本。** 合并由 OpenClash 自己的 `YAML.overwrite()` 完成
+（Psych 完整解析），我们只提供数据。
+
+> 历史上这里规划过「PC 侧渲染 `openclash-routes.yaml` + 路由器侧一个合并 `.sh`」
+> 的两文件方案，**已废弃**：那个 `.sh` 上线后导致分组全部消失、网络不可用
+> （2026-10-02 事故）。**当前只有一个部署物。**
 
 ### 路由器上没有 JS 运行时
 
@@ -568,6 +665,9 @@ cp /etc/openclash/custom/openclash_custom_overwrite.sh.bak \
 | 内核是否有配置测试开关 | ✅ **有**，`-t test configuration and exit` |
 | `filter` / `empty-fallback` 语法是否被本内核接受 | ✅ 全部接受（见第五节 9） |
 | `rules/*.yaml` 正则能否命中真实节点 | ✅ 见第五节 10、11 |
+| `filter` 键丢失的根因 | ✅ **init.d 的 `eval` 抽取**，见第五节 12 |
+| 覆写模块实际跑的是哪份代码 | ✅ **0.47.156 ≠ GitHub `dev`**，见第五节 12 |
+| `clash_meta -t` 在本机为何误报 | ✅ 缺 `SAFE_PATHS`，见第五节 14 |
 
 ### 已验证的关键事实：国际 DoH 在本机可达
 
@@ -619,6 +719,37 @@ ip rule show
 ip route show table 52
 ```
 
+### 「覆写到底生成了什么」这一组（2026-10-02 新增）
+
+```sh
+# ① 线上实际在跑的是哪份 OpenClash 代码（别拿 GitHub dev 分支推断）
+grep -n 'def self\.' /usr/share/openclash/YAML.rb
+grep -n 'yaml_content=' /etc/init.d/openclash
+
+# ② 覆写模块有没有被处理（要在重启后立刻看，日志会被 watchdog 清空）
+grep -E 'Processing Overwrite Module|Load YAML Override Block' /tmp/openclash.log
+
+# ③ 策略组的 filter 有没有被吃掉（本次事故的直接验入口）
+ruby -ryaml -e 'd=YAML.load_file(ARGV[0]);
+  (d["proxy-groups"]||[]).each{|g|
+    v=g["filter"]||g["exclude-filter"]
+    puts format("  %-16s %s", g["name"].to_s, v ? v : "（无筛选 ← 不对）")}' /etc/openclash/良心云.yaml
+
+# ④ 规则集实际载入条数（比日志可靠，直接问内核）
+S=$(ruby -ryaml -e 'print YAML.load_file("/etc/openclash/良心云.yaml")["secret"].to_s')
+curl -s -H "Authorization: Bearer $S" http://127.0.0.1:9090/providers/rules > /tmp/p.json
+ruby -ryaml -e 'j=YAML.load(File.read("/tmp/p.json"));
+  (j["providers"]||{}).each{|k,v| puts format("  %-22s %-9s %s", k, v["behavior"], v["ruleCount"])}'
+
+# ⑤ 离线校验（两个参数都不能省，见第五节 14）
+SAFE_PATHS=/etc/openclash:/usr/share/openclash \
+  /etc/openclash/core/clash_meta -t -d /etc/openclash -f /etc/openclash/良心云.yaml
+
+# ⑥ 部署的是不是仓库里那一版（自动更新已关，靠这个比对）
+md5sum /etc/openclash/overwrite/openclash-override-1002.conf
+uci show openclash | grep -A6 'config_overwrite\[1\]'
+```
+
 ---
 
 ## 十、命名与文件约定
@@ -627,7 +758,7 @@ ip route show table 52
 |---|---|
 | `rules/*.yaml` | 唯一事实来源，两端共用，**路由器版不改动其结构** |
 | `targets/flclash-override-1001.js` | FlClash 产物（已有） |
-| `targets/openclash-routes.yaml` | 路由器版静态路由文档（待生成） |
-| `targets/openclash_custom_overwrite.sh` | 路由器版合并脚本（待生成） |
-| `/etc/openclash/custom/openclash_custom_overwrite.sh` | 路由器上的实际位置 |
-| `/etc/openclash/custom/openclash_custom_*.list` | OpenClash 原生声明式清单 |
+| `targets/openclash-override-1002.conf` | **路由器产物（唯一部署物）**，上传到覆写模块 |
+| `targets/openclash-override-1002.md` | 上述产物的配套说明（改产物前先读） |
+| `/etc/openclash/overwrite/openclash-override-1002.conf` | 路由器上的实际位置（下载缓存 / 手动上传） |
+| `/etc/openclash/custom/openclash_custom_*.list` | OpenClash 原生声明式清单（本项目不用） |
