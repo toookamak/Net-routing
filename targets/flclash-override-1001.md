@@ -2,7 +2,7 @@
 
 > 本文与 [`flclash-override-1001.js`](./flclash-override-1001.js) 同级配套，描述该覆写脚本**做了什么**、**产出什么配置**、以及**改的时候该动哪里**。
 >
-> **文件版本：1001（2026-10-01 立项）** ｜ **内容版本：v1.0.0** ｜ **规模：53 条分流规则 / 45 个规则集 / 最多 21 个策略组**
+> **文件版本：1001（2026-10-01 立项）** ｜ **内容版本：v1.0.1** ｜ **规模：54 条分流规则 / 46 个规则集 / 最多 21 个策略组**
 
 ---
 
@@ -77,7 +77,7 @@ FlClash → mihomo 内核
 | 2 | Sniffer | 流量嗅探、TLS/HTTP 解析、APNs 与 Telegram 排除 | 独立，但须在规则前就位 |
 | 3 | Tailscale | 注入 `TS-TAILSCALE` 出站节点 | **必须在节点分类前**，否则该节点会被当成机场节点参与测速 |
 | 4 | Proxy Groups | 分类订阅节点，构建全部策略组 | **必须在规则前**，规则的目标组必须已存在 |
-| 5 | Rules | 按优先级拼装 53 条规则 + 45 个 rule-provider | 依赖策略组名 |
+| 5 | Rules | 按优先级拼装 54 条规则 + 46 个 rule-provider | 依赖策略组名 |
 | 6 | DNS | fake-ip、DoH 分流、fake-ip-filter | 独立 |
 | 7 | TUN | TUN 接管、IPv6 封堵、MTU | 收尾 |
 
@@ -150,12 +150,12 @@ FlClash → mihomo 内核
 
 | 组名 | 类型 | 默认项 | 接入的规则 |
 |---|---|---|---|
-| 🛡️ 国内直连 | `select` | **DIRECT** | 第 52 条 `GEOIP,CN` |
-| 🌍 兜底代理 | `select` | 🧭 代理模式 | 第 53 条 `MATCH` |
+| 🛡️ 国内直连 | `select` | **DIRECT** | 第 53 条 `GEOIP,CN` |
+| 🌍 兜底代理 | `select` | 🧭 代理模式 | 第 54 条 `MATCH` |
 
 ---
 
-## 四、规则链全表（53 条）
+## 四、规则链全表（54 条）
 
 mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。下表是实际输出顺序。
 
@@ -214,67 +214,68 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 |---|---|---|
 | 21 | `RULE-SET,CustomDirectRules,DIRECT` | **你自己的直连规则**（`rulesets/OwnDIRECTRules.yaml`） |
 
-### 第 7 段 · 办公通讯与开发工具链（22–32）→ `📁 办公通讯`
+### 第 7 段 · 办公通讯与开发工具链（22–33）→ `📁 办公通讯`
 
 | # | 规则 | 覆盖对象 |
 |---|---|---|
 | 22 | `RULE-SET,Figma_ip,📁 办公通讯` | Figma |
 | 23 | `RULE-SET,Notion_ip,📁 办公通讯` | Notion |
-| 24 | `RULE-SET,Github,📁 办公通讯` | GitHub |
-| 25 | `RULE-SET,OneDrive,📁 办公通讯` | OneDrive |
-| 26 | `RULE-SET,Dropbox,📁 办公通讯` | Dropbox |
-| 27 | `RULE-SET,Telegram_ip,📁 办公通讯` | Telegram |
-| 28 | `RULE-SET,Telegram_no_ip,📁 办公通讯` | Telegram（重复，见已知问题） |
-| 29 | `RULE-SET,Microsoft_no_ip,📁 办公通讯` | 微软全线 |
-| 30 | `RULE-SET,Docker,📁 办公通讯` | Docker Hub（切 DIRECT 可让 `docker pull` 直连） |
-| 31 | `RULE-SET,Npm,📁 办公通讯` | npm / Node.js 包源（**内嵌规则**，无外部依赖） |
-| 32 | `RULE-SET,CustomProxyRules,📁 办公通讯` | **你自己的代理规则**（`rulesets/OwnPROXYRules.yaml`） |
+| 24 | `RULE-SET,Twitter,📁 办公通讯` | X / Twitter（含 `twimg.com` 图片与视频域名） |
+| 25 | `RULE-SET,Github,📁 办公通讯` | GitHub |
+| 26 | `RULE-SET,OneDrive,📁 办公通讯` | OneDrive |
+| 27 | `RULE-SET,Dropbox,📁 办公通讯` | Dropbox |
+| 28 | `RULE-SET,Telegram_ip,📁 办公通讯` | Telegram |
+| 29 | `RULE-SET,Telegram_no_ip,📁 办公通讯` | Telegram（重复，见已知问题） |
+| 30 | `RULE-SET,Microsoft_no_ip,📁 办公通讯` | 微软全线 |
+| 31 | `RULE-SET,Docker,📁 办公通讯` | Docker Hub（切 DIRECT 可让 `docker pull` 直连） |
+| 32 | `RULE-SET,Npm,📁 办公通讯` | npm / Node.js 包源（**内嵌规则**，无外部依赖） |
+| 33 | `RULE-SET,CustomProxyRules,📁 办公通讯` | **你自己的代理规则**（`rulesets/OwnPROXYRules.yaml`） |
 
-### 第 8 段 · AI 服务（33–35）→ `🤖 AI服务`
-
-| # | 规则 | 覆盖对象 |
-|---|---|---|
-| 33 | `RULE-SET,OpenAI,🤖 AI服务` | OpenAI / ChatGPT |
-| 34 | `RULE-SET,AI_no_ip,🤖 AI服务` | AI 服务补充规则 |
-| 35 | `RULE-SET,Gemini,🤖 AI服务` | Google Gemini |
-
-### 第 9 段 · 谷歌服务（36–39）→ `🔍 谷歌服务`
+### 第 8 段 · AI 服务（34–36）→ `🤖 AI服务`
 
 | # | 规则 | 覆盖对象 |
 |---|---|---|
-| 36 | `RULE-SET,YouTube,🔍 谷歌服务` | YouTube |
-| 37 | `RULE-SET,GoogleFCM_ip,🔍 谷歌服务` | Google 推送（重复，见已知问题） |
-| 38 | `RULE-SET,Google,🔍 谷歌服务` | Google 全线 |
-| 39 | `RULE-SET,GoogleFCM_no_ip,🔍 谷歌服务` | Google 推送（重复，见已知问题） |
+| 34 | `RULE-SET,OpenAI,🤖 AI服务` | OpenAI / ChatGPT |
+| 35 | `RULE-SET,AI_no_ip,🤖 AI服务` | AI 服务补充规则 |
+| 36 | `RULE-SET,Gemini,🤖 AI服务` | Google Gemini |
 
-### 第 10 段 · 大流量通道（40–46）→ `📺 大流量通道`
-
-| # | 规则 | 覆盖对象 |
-|---|---|---|
-| 40 | `RULE-SET,MicrosoftCDN_no_ip,📺 大流量通道` | 微软 CDN |
-| 41 | `RULE-SET,CDN_domainset,📺 大流量通道` | CDN 域名集 |
-| 42 | `RULE-SET,CDN_no_ip,📺 大流量通道` | CDN 补充 |
-| 43 | `RULE-SET,Download_domainset,📺 大流量通道` | 下载站域名集 |
-| 44 | `RULE-SET,Download_no_ip,📺 大流量通道` | 下载站补充 |
-| 45 | `RULE-SET,GameDownload,📺 大流量通道` | 游戏下载分发平台 |
-| 46 | `RULE-SET,Stream_ip,📺 大流量通道` | 流媒体 |
-
-### 第 11 段 · 游戏平台（47–51）→ `游戏平台`
+### 第 9 段 · 谷歌服务（37–40）→ `🔍 谷歌服务`
 
 | # | 规则 | 覆盖对象 |
 |---|---|---|
-| 47 | `RULE-SET,UnrealRules,游戏平台` | Epic / Unreal |
-| 48 | `RULE-SET,Steam,游戏平台` | Steam（商店与下载，CN 服务器除外，见第 18 条） |
-| 49 | `RULE-SET,Origin,游戏平台` | EA Origin |
-| 50 | `RULE-SET,Sony,游戏平台` | PlayStation |
-| 51 | `RULE-SET,Nintendo,游戏平台` | Switch |
+| 37 | `RULE-SET,YouTube,🔍 谷歌服务` | YouTube |
+| 38 | `RULE-SET,GoogleFCM_ip,🔍 谷歌服务` | Google 推送（重复，见已知问题） |
+| 39 | `RULE-SET,Google,🔍 谷歌服务` | Google 全线 |
+| 40 | `RULE-SET,GoogleFCM_no_ip,🔍 谷歌服务` | Google 推送（重复，见已知问题） |
 
-### 第 12 段 · 兜底（52–53）
+### 第 10 段 · 大流量通道（41–47）→ `📺 大流量通道`
+
+| # | 规则 | 覆盖对象 |
+|---|---|---|
+| 41 | `RULE-SET,MicrosoftCDN_no_ip,📺 大流量通道` | 微软 CDN |
+| 42 | `RULE-SET,CDN_domainset,📺 大流量通道` | CDN 域名集 |
+| 43 | `RULE-SET,CDN_no_ip,📺 大流量通道` | CDN 补充 |
+| 44 | `RULE-SET,Download_domainset,📺 大流量通道` | 下载站域名集 |
+| 45 | `RULE-SET,Download_no_ip,📺 大流量通道` | 下载站补充 |
+| 46 | `RULE-SET,GameDownload,📺 大流量通道` | 游戏下载分发平台 |
+| 47 | `RULE-SET,Stream_ip,📺 大流量通道` | 流媒体 |
+
+### 第 11 段 · 游戏平台（48–52）→ `游戏平台`
+
+| # | 规则 | 覆盖对象 |
+|---|---|---|
+| 48 | `RULE-SET,UnrealRules,游戏平台` | Epic / Unreal |
+| 49 | `RULE-SET,Steam,游戏平台` | Steam（商店与下载，CN 服务器除外，见第 18 条） |
+| 50 | `RULE-SET,Origin,游戏平台` | EA Origin |
+| 51 | `RULE-SET,Sony,游戏平台` | PlayStation |
+| 52 | `RULE-SET,Nintendo,游戏平台` | Switch |
+
+### 第 12 段 · 兜底（53–54）
 
 | # | 规则 | 作用 |
 |---|---|---|
-| 52 | `GEOIP,CN,🛡️ 国内直连` | 国内 IP 兜底 |
-| 53 | `MATCH,🌍 兜底代理` | 其余全部走代理 |
+| 53 | `GEOIP,CN,🛡️ 国内直连` | 国内 IP 兜底 |
+| 54 | `MATCH,🌍 兜底代理` | 其余全部走代理 |
 
 > **这两条必须是最后两条。** 提前会让后面的规则永远不生效。
 
@@ -293,13 +294,13 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 
 ---
 
-## 五、规则集清单（45 个）
+## 五、规则集清单（46 个）
 
 | 来源 | 数量 | 格式 | 更新间隔 | 用途 |
 |---|---|---|---|---|
 | [RealSeek/Clash_Rule_DIY](https://github.com/RealSeek/Clash_Rule_DIY) | 14 | yaml / classical | 48h | 广告拦截、国内直连、CDN、下载、流媒体、AI 补充 |
 | [ACL4SSR](https://github.com/ACL4SSR/ACL4SSR) | 12 | text / classical | 48h | UnBan、Google、YouTube、Telegram、OneDrive、主机商店 |
-| [blackmatrix7/ios_rule_script](https://github.com/blackmatrix7/ios_rule_script) | 12 | yaml / classical | 48h | GitHub、Docker、OpenAI、Gemini、Figma、Notion、Dropbox、Steam、Epic、游戏下载 |
+| [blackmatrix7/ios_rule_script](https://github.com/blackmatrix7/ios_rule_script) | 13 | yaml / classical | 48h | GitHub、Docker、OpenAI、Gemini、Figma、Notion、Twitter/X、Dropbox、Steam、Epic、游戏下载 |
 | [SukkaW/ruleset](https://ruleset.skk.moe) | 2 | text / classical+domain | 48h | 国内备案微软 / Apple CDN |
 | [Loyalsoldier/clash-rules](https://github.com/Loyalsoldier/clash-rules) | 1 | text / classical | 24h | `applications`（进程名分流） |
 | 自托管（`rulesets/*.yaml`） | 3 | yaml / classical | 24h | 你自己的 DIRECT / PROXY / REJECT 规则 |
@@ -355,13 +356,38 @@ tun.inet6-route-address: ["2000::/3"]   // TUN：接管全球 IPv6 单播段
 | 项 | 值 | 理由 |
 |---|---|---|
 | 增强模式 | `fake-ip` | 性能与分流准确度优于 `redir-host` |
-| 默认 DNS | Cloudflare DoH + Google DoH | 防止未知域名泄露给国内 DNS |
-| 引导 DNS | 223.5.5.5 / 119.29.29.29 / 1.1.1.1 / 8.8.8.8 | 仅用于解析上面两个 DoH 的域名 |
-| 代理节点域名 | 同国外 DoH | 防止被污染导致连不上节点 |
-| 分流策略 | `geosite:cn,private,apple` → 阿里 DoH + 腾讯 DoH | 国内域名走国内 DNS，国内网站保持一层直连 |
+| 默认 DNS | 腾讯 DoH + 阿里 DoH | **见下方「为什么不用国际 DoH」** |
+| 引导 DNS | 223.5.5.5 / 119.29.29.29 | 明文 UDP，用于解析上面两个 DoH 的域名 |
+| 代理节点域名 | 同国内 DoH | 国际 DoH 不可达，只能如此 |
+| 分流策略 | `geosite:private,apple` → 阿里 DoH + 腾讯 DoH | 本地与苹果域名显式指定，不受默认值变动影响 |
+| `fallback` / `fallback-filter` | **不配置** | 配了反而会因为国际源不可达而整体解析失败 |
 
 `fake-ip-filter` 共 27 条，覆盖局域网、IoT、银行支付、系统连通性检测、Tailscale MagicDNS。
 这些服务拿到假 IP 就无法工作（无法回连、心跳、局域网发现或真实 IP 校验）。
+
+#### 为什么不用国际 DoH
+
+FlClash 内置的 mihomo 内核**无法把 DNS 查询送进代理**。2026-10-02 实测两条常见修法均无效：
+
+- `respect-rules: true` —— 不会代理 DoH。debug 日志里普通流量都有 `match ... using <出口>`，
+  而 DoH 上游没有任何规则匹配行，说明查询直接走了本机网络。
+- `nameserver` 加 `#代理名` 后缀 —— 需 mihomo ≥ v1.15，低版本静默忽略。
+
+而国际 DoH 从大陆直连必然超时：同一请求 Cloudflare DoH 直连 5652ms、走代理 215ms，
+稳定超过 mihomo 的 5 秒 DNS 超时，表现为 `dns resolve failed: context deadline exceeded`。
+
+**改用国内 DoH 后为什么够用：**
+
+- 走代理出口的流量**不需要本地解析**，域名直接交给远端节点，完全不受 DNS 影响；
+- 命中 DIRECT 的境外 CDN 域名，国内 DoH 也能返回正确 IP
+  （实测阿里 DoH 正确返回了 `cdn.ldstatic.com` 的 Cloudflare 地址）。
+
+代价是失去「防 DNS 污染」能力，这是当前内核版本下的取舍。
+若将来升级到 mihomo ≥ v1.15，可改回国际 DoH 并配合 `#代理名`，届时再调整本节。
+
+> ⚠️ 使用本配置前请确认 FlClash 的 **「覆写 DNS」开关已关闭**（`overrideDns: false`）。
+> 开启时 FlClash 会在脚本执行后用自己的 DNS 整段替换掉这里的设置，
+> 症状是「规则全对、DNS 全错」。定位方式见仓库 README 的硬约束 #7。
 
 ### TUN
 

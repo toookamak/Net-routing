@@ -5,7 +5,7 @@
 // 形态：mihomo 覆写脚本，标准入口为 `function main(params) { ...; return params }`。
 // 依赖：mihomo >= v1.19.25（FlClash >= 0.8.93 打包该内核）—— Tailscale 出站的硬性要求。
 //
-// 版本：v1.0.0（项目起始基线，版本号自此重新计数）
+// 版本：v1.0.1（2026-10-01：新增 Twitter/X 规则并纳入办公通讯）
 // 文件版本：1001（2026-10-01）
 //
 // ── 版本约定（重要）──────────────────────────────────────────────────────
@@ -34,7 +34,7 @@
 //     // @generated:begin <块名>   ...   // @generated:end <块名>
 // 标记之外是**逻辑**（手写维护）。重新生成时只替换标记之间的内容。
 //
-// 当前规模：53 条分流规则 / 45 个规则集引用 / 最多 21 个策略组
+// 当前规模：54 条分流规则 / 46 个规则集引用 / 最多 21 个策略组
 //           （地区组与特性组按订阅中实际出现的节点动态增减，21 是满配值）
 // ============================================================================
 
@@ -1147,6 +1147,7 @@ const RULE_PRIORITIES = [
         rules: [
             "Figma_ip",
             "Notion_ip",
+            "Twitter",
             "Github",
             "OneDrive",
             "Dropbox",
@@ -1473,6 +1474,13 @@ const RULE_PROVIDER_DEFINITIONS = {
         behavior: "classical",
         interval: 172800
     },
+    Twitter: {
+        url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Twitter/Twitter.yaml",
+        path: "./ruleset/toookamak/Twitter.yaml",
+        format: "yaml",
+        behavior: "classical",
+        interval: 172800
+    },
     OneDrive: {
         url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/OneDrive.list",
         path: "./ruleset/toookamak/OneDrive.list",
@@ -1757,28 +1765,45 @@ function overwriteDns(params) {
             "*.esphome.io", "*.homeassistant.io",
             "+.ts.net"
         ],
-        // 用于解析其余 nameserver 域名的引导 DNS
+        // 用于解析其余 nameserver 域名的引导 DNS（明文 UDP，必须能直连）
         "default-nameserver": [
             "223.5.5.5",
-            "119.29.29.29",
-            "1.1.1.1",
-            "8.8.8.8"
+            "119.29.29.29"
         ],
-        // 默认 DNS：只用国外 DoH，防止未知域名泄露给国内 DNS
+        // 默认 DNS：只用国内 DoH。
+        //
+        // ⚠️ 不要再改回 Cloudflare / Google 等国外 DoH —— 那是踩过坑的设计。
+        //
+        //    原因：FlClash 内置的 mihomo 内核**无法把 DNS 查询送进代理**。
+        //    实测（2026-10-02）两条常见修法都无效：
+        //      · respect-rules: true —— 不会代理 DoH。debug 日志里普通流量都有
+        //        `match ... using <出口>`，而 DoH 上游没有任何规则匹配行。
+        //      · nameserver 加 `#代理名` 后缀 —— 需 mihomo ≥ v1.15，低版本静默忽略。
+        //    而国外 DoH 从大陆直连必然超时：同一请求 cloudflare DoH 直连 5652ms、
+        //    走代理只要 215ms，稳定超过 mihomo 的 5 秒 DNS 超时，
+        //    于是 `dns resolve failed: context deadline exceeded`。
+        //
+        //    为什么国内 DoH 够用：
+        //      · 走代理出口的流量**不需要本地解析**，域名直接交给远端节点，
+        //        所以这部分完全不受 DNS 影响；
+        //      · 命中 DIRECT 的境外 CDN 域名，国内 DoH 也能返回正确 IP
+        //        （实测 alidns 正确返回 cdn.ldstatic.com 的 Cloudflare 地址）。
+        //    代价是失去「防 DNS 污染」能力，这是当前内核版本下的取舍。
         nameserver: [
-            "https://dns.cloudflare.com/dns-query",
-            "https://dns.google/dns-query"
+            'https://doh.pub/dns-query',
+            'https://dns.alidns.com/dns-query'
         ],
-        // 代理节点自身域名必须用干净的 DNS，否则会被污染导致连不上
+        // 代理节点自身域名的解析源。国际 DoH 不可达，只能用国内 DoH；
+        // 若机场节点域名遭污染，需改用机场自带的解析入口。
         "proxy-server-nameserver": [
-            "https://dns.cloudflare.com/dns-query",
-            "https://dns.google/dns-query"
+            'https://doh.pub/dns-query',
+            'https://dns.alidns.com/dns-query'
         ],
-        // 分流策略：国内 / 私有 / 苹果域名走国内 DoH。
-        // 未命中本 policy 的域名本就落到上方 nameserver（国外 DoH），
-        // 无需再为「非国内」单独写一条分支。
+        // 本地 / 苹果域名显式指定国内 DoH。
+        // 保持 policy 是为了将来若升级内核、改回国际 DoH 时，
+        // 这两类域名仍稳定走国内源，不受默认值变动影响。
         "nameserver-policy": {
-            'geosite:cn,private,apple': [
+            'geosite:private,apple': [
                 'https://dns.alidns.com/dns-query',
                 'https://doh.pub/dns-query'
             ]

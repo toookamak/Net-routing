@@ -221,10 +221,9 @@ payload:
    症状是"规则全对、DNS 全错"，不看源码根本猜不到是谁赢。
 
    2026-10-02 实际踩到：产物 `overwriteDns` 写的是
-   `nameserver: [dns.cloudflare.com, dns.google]` +
-   `nameserver-policy: geosite:cn,private,apple → 国内 DoH`（**没有 fallback**），
+   `nameserver: [doh.pub, alidns]` + `nameserver-policy: geosite:private,apple → 国内 DoH`，
    运行中的 `config.yaml` 却仍是订阅那份
-   `nameserver: [doh.pub, alidns]` + `fallback: [tls://8.8.4.4, tls://1.1.1.1]` +
+   `nameserver: [cloudflare, google]` + `fallback: [tls://8.8.4.4, tls://1.1.1.1]` +
    `respect-rules: false`。`find-process-mode` 同样对不上（产物 `strict`，运行 `off`）。
 
    定位方式：FlClash 的 `shared_preferences.json` → `flutter.config` → `overrideDns`，
@@ -235,8 +234,8 @@ payload:
 
    **换新订阅或重装客户端后，第一件事就是确认这一项。**
 
-   快速自检：对比运行中配置的 `nameserver` 是否为
-   `dns.cloudflare.com` / `dns.google`，且**没有** `fallback` 段。
+   快速自检：运行中配置的 `nameserver` 应当只有 `doh.pub` / `dns.alidns`，
+   且**没有** `fallback` 段。
 
    ⚠️ 注意别和 Clash Verge Rev 搞混：Ve 的覆写有「合并 / 替换」两种类型，
    FlClash 没有这个概念，它的覆写只有 **标准 / 脚本 / 自定义规则** 三选一（互斥）。
