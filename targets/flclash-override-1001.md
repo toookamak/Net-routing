@@ -325,7 +325,7 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 |---|---|---|---|
 | `rulesets/OwnREJECTRules.yaml` | `CustomRejectRules` | 第 8 条（广告拦截段末尾） | 24h |
 | `rulesets/OwnDIRECTRules.yaml` | `CustomDirectRules` | 第 21 条（锁死 DIRECT） | 24h |
-| `rulesets/OwnPROXYRules.yaml` | `CustomProxyRules` | 第 32 条（办公通讯段末尾） | 24h |
+| `rulesets/OwnPROXYRules.yaml` | `CustomProxyRules` | 第 33 条（办公通讯段末尾） | 24h |
 
 **这三个文件的地址只允许出现在 `rules/providers.yaml` 一处。** 产物里如果出现第二处硬编码定义，
 会在运行时把 YAML 生成的值整个覆盖掉，且 mihomo 静默空载不报错。
@@ -451,19 +451,37 @@ FlClash 内置的 mihomo 内核**无法把 DNS 查询送进代理**。2026-10-02
 
 ## 九、已知问题
 
-### 1. 两组 provider 共用同一 `path`（未修复）
+### 1. 两组 provider 在脚本里声明了相同的 `path`（FlClash 下不触发）
 
-`Telegram_ip` / `Telegram_no_ip` 与 `GoogleFCM_ip` / `GoogleFCM_no_ip` 各自指向**完全相同**的
-url 与 `path`。运行时必定输出告警：
+`Telegram_ip` / `Telegram_no_ip` 与 `GoogleFCM_ip` / `GoogleFCM_no_ip` 在
+`RULE_PROVIDER_DEFINITIONS` 里指向**完全相同**的 `path`：
+
+```
+Telegram_ip    -> ./ruleset/toookamak/Telegram.list
+Telegram_no_ip -> ./ruleset/toookamak/Telegram.list
+GoogleFCM_ip    -> ./ruleset/toookamak/GoogleFCM.list
+GoogleFCM_no_ip -> ./ruleset/toookamak/GoogleFCM.list
+```
+
+脚本自带的重复检测会输出告警：
 
 ```
 [net-routing Warn] 多个 provider 共用同一路径: ./ruleset/toookamak/Telegram.list -> Telegram_ip, Telegram_no_ip
-[net-routing Warn] 多个 provider 共用同一路径: ./ruleset/toookamak/GoogleFCM.list -> GoogleFCM_ip, GoogleFCM_no_ip
 ```
 
-**后果**：两个 provider 竞争写入同一缓存文件，更新时可能互相覆盖；
-且这两对规则在功能上完全重复（两者都不带 `no-resolve`）。
-合并需改规则名，待办。
+**但在 FlClash 上实际不会触发。** FlClash 的 `patchRawConfig` 在脚本执行后还有一个
+「Provider Path Mapping」步骤，会把每个 provider 的 path 重映射成独立的内容哈希缓存路径。
+2026-10-02 实测运行中的 `config.yaml` 里这四个 provider 拿到的是四个不同的哈希路径，
+告警也不会出现。
+
+**所以这是一个「声明层遗留、运行时被客户端掩盖」的问题：**
+
+- 在 FlClash 上无感，但脚本里确实有重复声明；
+- 换到**尊重声明路径**的客户端（如 Clash Verge Rev）就会告警，
+  两个 provider 竞争写入同一缓存文件，更新时可能互相覆盖；
+- 这两对规则在功能上也完全重复（两者都不带 `no-resolve`）。
+
+彻底修需要改规则名并合并，属待办。
 
 ### 2. 家宽 / 低倍率节点不进入地区组（设计取舍）
 

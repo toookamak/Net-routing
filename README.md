@@ -247,7 +247,20 @@ payload:
 
 以下问题在编写本 README 时经实际运行核对发现，**尚未修复**：
 
-### 1. 家宽 / 低倍率节点不会进入地区组
+### 1. 两组 provider 在脚本里声明了相同 `path`（FlClash 下不触发）
+
+`Telegram_ip` / `Telegram_no_ip` 与 `GoogleFCM_ip` / `GoogleFCM_no_ip` 在产物的
+`RULE_PROVIDER_DEFINITIONS` 里指向完全相同的 `path`，脚本自带的重复检测会告警。
+
+**但在 FlClash 上实际不触发**：FlClash 的 `patchRawConfig` 在脚本执行后还有一步
+「Provider Path Mapping」，会把每个 provider 的 path 重映射成独立的内容哈希缓存路径。
+2026-10-02 实测运行中的 `config.yaml` 里这四个 provider 拿到的是四个不同哈希路径。
+
+即「声明层遗留、运行时被客户端掩盖」。换到尊重声明路径的客户端（如 Clash Verge Rev）
+就会告警，两个 provider 竞争写同一缓存文件。这两对规则功能上也完全重复。详见
+[`targets/flclash-override-1001.md`](targets/flclash-override-1001.md) 的「已知问题」。
+
+### 2. 家宽 / 低倍率节点不会进入地区组
 
 `classifyNodes` 中，命中「家宽」或「低倍率」特征的节点会被**排除在所有地区组之外**（`if (!isSpecial)`）。
 
@@ -255,7 +268,7 @@ payload:
 
 这是继承自原单文件脚本的既有行为，而非本次重构引入。
 
-### 2. 规则集命名容易误解
+### 3. 规则集命名容易误解
 
 provider 名中的 `_ip` / `_no_ip` 后缀表示的是**该规则集的内容类型**（含 IP 规则 / 纯域名规则），**不是** mihomo 的 `no-resolve` 参数。当前 54 条规则中只有 3 条真正带 `no-resolve`，且均为内联的 `IP-CIDR` / `GEOIP` 规则。
 
