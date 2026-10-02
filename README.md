@@ -214,15 +214,21 @@ payload:
 
    **重新生成产物时要确认没有再引入第二处定义。**
 
-7. **FlClash 里订阅的覆写类型必须是「替换（Replace）」**
-   设成「合并（Merge）」时，订阅自带的 `dns` 与基础配置会**覆盖掉**产物写进去的值，
-   而 `rules` / `proxy-providers` 仍会生效 —— 症状是"规则全对，DNS 全错"，很难一眼看出。
+7. **FlClash 的「覆写 DNS」开关必须关掉**
+   FlClash 的配置处理顺序是：**先跑覆写脚本 → 再套用客户端自己的覆写**。
+   客户端侧的 `overrideDns` 开关一旦打开，它就会用 FlClash 自带的 DNS
+   **整段替换**掉脚本 `overwriteDns` 写进去的值，而 `rules` / `proxy-providers` 不受影响。
+   症状是"规则全对、DNS 全错"，不看源码根本猜不到是谁赢。
 
-   2026-10-02 实际遇到：产物的 `overwriteDns` 明明写了
-   `nameserver: [dns.cloudflare.com, dns.google]` + `nameserver-policy: geosite:cn,private,apple → 国内 DoH`，
-   运行中的 `config.yaml` 却仍是订阅的
-   `nameserver: [doh.pub, alidns]` + `fallback: [tls://8.8.4.4, tls://1.1.1.1]`。
-   `find-process-mode` 同样对不上（产物 `strict`，运行 `off`）。
+   2026-10-02 实际踩到：产物 `overwriteDns` 写的是
+   `nameserver: [dns.cloudflare.com, dns.google]` +
+   `nameserver-policy: geosite:cn,private,apple → 国内 DoH`（**没有 fallback**），
+   运行中的 `config.yaml` 却仍是订阅那份
+   `nameserver: [doh.pub, alidns]` + `fallback: [tls://8.8.4.4, tls://1.1.1.1]` +
+   `respect-rules: false`。`find-process-mode` 同样对不上（产物 `strict`，运行 `off`）。
+
+   定位方式：FlClash 的 `shared_preferences.json` → `flutter.config` → `overrideDns`，
+   实测该值为 `true`。把它关掉，脚本的 DNS 才会生效。
 
    后果是境外域名在走直连出口时全部 `dns resolve failed: context deadline exceeded` ——
    因为订阅那份 DNS 的 `fallback` 指向大陆不可直连的 DoT 源，且 `respect-rules: false`。
@@ -231,6 +237,10 @@ payload:
 
    快速自检：对比运行中配置的 `nameserver` 是否为
    `dns.cloudflare.com` / `dns.google`，且**没有** `fallback` 段。
+
+   ⚠️ 注意别和 Clash Verge Rev 搞混：Ve 的覆写有「合并 / 替换」两种类型，
+   FlClash 没有这个概念，它的覆写只有 **标准 / 脚本 / 自定义规则** 三选一（互斥）。
+   本项目是 FlClash 产物，对应的是「脚本」模式。
 
 ---
 
