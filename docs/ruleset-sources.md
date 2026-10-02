@@ -2,14 +2,14 @@
 
 > 本文件为手工整理，核对上游规则集是否变更时请手动更新。
 >
-> 最近检查：2026-10-01 08:47:45 UTC
+> 最近检查：2026-10-01 10:20:06 UTC（本次仅复核新增的 `Twitter` 规则集，其余条目沿用上次结果）
 
 ## 概览
 
 | 项 | 数量 |
 |---|---|
-| 远程规则集 | 44 |
-| 存活 | 41 |
+| 远程规则集 | 45 |
+| 存活 | 42 |
 | **失效** | **3** |
 | 内嵌规则集（无外部依赖） | 15 |
 | 已定义但未被任何规则引用 | 0 |
@@ -52,6 +52,7 @@
 | `Telegram_no_ip` | text | classical | 236B | ACL4SSR/ACL4SSR | office | ✅ 200 |
 | `Figma_ip` | yaml | classical | 175B | blackmatrix7/ios_rule_script | office | ✅ 200 |
 | `Notion_ip` | yaml | classical | 227B | blackmatrix7/ios_rule_script | office | ✅ 200 |
+| `Twitter` | yaml | classical | 1191B | blackmatrix7/ios_rule_script | office | ✅ 200 |
 | `OneDrive` | text | classical | 268B | ACL4SSR/ACL4SSR | office | ✅ 200 |
 | `Dropbox` | yaml | classical | 292B | blackmatrix7/ios_rule_script | office | ✅ 200 |
 | `AI_no_ip` | yaml | classical | 433B | RealSeek/Clash_Rule_DIY | ai | ✅ 200 |

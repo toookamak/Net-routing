@@ -5,7 +5,7 @@
 
 ---
 
-## v1.0.0（2026-10-01）· 当前基线
+## v1.0.0（2026-10-01）· 起始基线
 
 ### 项目形态
 
@@ -32,6 +32,52 @@ docs/        设计说明 / 规则集来源清单 / 本文件
   provider 静默空载。YAML + `payload` 数组原生支持注释，可承载填写说明。
 - **`payload` 必须写成 `[]`**
   只写 `payload:` 会解析成 `null` 而非空数组，内核会拒绝加载。
+
+---
+
+## v1.0.1（2026-10-01）
+
+### 新增规则集
+
+- **`Twitter`（X）纳入「📁 办公通讯」** —— 上游取 blackmatrix7/ios_rule_script：
+
+  ```
+  https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Twitter/Twitter.yaml
+  ```
+
+  `format: yaml` / `behavior: classical` / `interval: 172800`，落盘 `./ruleset/toookamak/Twitter.yaml`。
+  内容共 33 条：26 条 `DOMAIN-SUFFIX`（含 `x.com`、`twitter.com`、`twimg.com`、`twvid.com`、
+  `t.co`、`tweetdeck.com`、`vine.co` 等）、1 条 `DOMAIN-KEYWORD,twitter`、6 条 `IP-CIDR`。
+  `twimg.com` 后缀覆盖 `pbs.twimg.com` / `abs.twimg.com` / `video.twimg.com`，即图片与视频 CDN。
+
+  此前的现象是 X 相关域名没有专属规则，全部落到第 53 条 `MATCH` 的「🌍 兜底代理」；
+  纳入办公通讯后，可在「📁 办公通讯」里单独指定出口，便于给 X 挑节点。
+
+### 规则顺序
+
+`rules/priorities.yaml` 的 `office` 段在 `Notion_ip` 之后、`Github` 之前插入 `Twitter`：
+
+```yaml
+- Figma_ip
+- Notion_ip
+- Twitter      # 新增
+- Github
+```
+
+Figma 与 Notion 的规则**本次未新增** —— 它们早在 v1.0.0 基线时就已在 `office` 段内
+（`rules/providers.yaml` 的 `Figma_ip` / `Notion_ip` 与 `priorities.yaml` 第 66–67 行）。
+本次只是确认它们的目标组仍然是「📁 办公通讯」，未做改动。
+
+### 连带更新
+
+规则总数 53 → **54**，规则集总数 45 → **46**（远程 44 → 45，内嵌 1 不变）。
+同步更新了 `README.md`、`targets/flclash-override-1001.md`（含规则链全表重新编号）、
+`docs/design.md`、`docs/ruleset-sources.md`。
+
+产物头部内容版本 v1.0.0 → **v1.0.1**，作为本次改动的确认标记。
+
+> 本次只改 `rules/*.yaml` 与产物，**未改任何 `rulesets/*.yaml`**，
+> 因此自托管三个规则集的 404 状态与本次改动无关。
 
 ---
 

@@ -66,7 +66,7 @@ flclash-override-1001.js        ← 1001 = 2026-10-01 立项
 
 | 文件 | 职责 |
 |---|---|
-| `providers.yaml` | 45 个第三方规则集的 URL、格式、behavior、更新间隔 |
+| `providers.yaml` | 46 个第三方规则集的 URL、格式、behavior、更新间隔 |
 | `priorities.yaml` | 规则顺序与目标组 —— 顺序即优先级 |
 | `groups.yaml` | 策略组定义与命名规范 |
 | `regions.yaml` | 地区匹配正则 |

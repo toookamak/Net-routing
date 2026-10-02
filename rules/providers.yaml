@@ -167,6 +167,15 @@
     format: "yaml"
     behavior: "classical"
     interval: 172800
+  # v1.0.1 新增：X / Twitter 规则集，纳入「📁 办公通讯」
+  # 上游 33 条（26 DOMAIN-SUFFIX + 1 DOMAIN-KEYWORD + 6 IP-CIDR），
+  # twimg.com 后缀覆盖 pbs / abs / video 三个图片视频 CDN。
+  Twitter:
+    url: "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Twitter/Twitter.yaml"
+    path: "./ruleset/toookamak/Twitter.yaml"
+    format: "yaml"
+    behavior: "classical"
+    interval: 172800
   OneDrive:
     url: "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Ruleset/OneDrive.list"
     path: "./ruleset/toookamak/OneDrive.list"

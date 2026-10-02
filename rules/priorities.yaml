@@ -65,6 +65,8 @@
   rules:
     - Figma_ip
     - Notion_ip
+    # v1.0.1 新增：X / Twitter → 📁 办公通讯
+    - Twitter
     - Github
     - OneDrive
     - Dropbox
