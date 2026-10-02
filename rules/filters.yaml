@@ -17,5 +17,28 @@ residential:
   filter: "家宽|原生|residential|home"
 
 lowrate:
-  comment: 低倍率节点（按流量倍率计费便宜的）
+  comment: |
+    低倍率节点（按流量倍率计费便宜的）—— 只覆盖中文/英文写法。
+    ⚠️ 数字倍率写法不在本键内，见 lowrate_numeric。
   filter: "低倍率|lowrate|低-rate|倍率"
+
+lowrate_numeric:
+  comment: |
+    数字倍率写法。2026-10-02 实测：某订阅 51 个节点里本文件的 lowrate 命中 **0 个**，
+    因为节点用的是 `|0.5x` `|0.1x` `|0.01x` 这种记法，不含「倍率」二字。
+    扩充后同一批节点命中 18 个。这是通用缺口，不是某个机场的特殊命名。
+
+    ⚠️ 为什么不直接并进 lowrate：
+       flclash 产物用 lowrate 同时干两件事 —— ①建「💰 低倍率节点」特性组
+       ②把命中节点排除出所有地区组（见 docs/design.md 已知问题 2）。
+       并入数字倍率会让 ②把大部分地区组清空（实测：美国 12→0、英国 4→0）。
+       路由器版地区组不设 exclude-filter（见 docs/openclash.md 第五节 11），
+       所以能安全引用本键。两端由各自渲染器决定引哪个，不要合并。
+  filter: "0\\.\\d+x|[0-9]+倍"
+
+streaming:
+  comment: |
+    流媒体 / 解锁节点。2026-10-02 新增。
+    中文机场普遍用「流媒体」标注解锁专用节点，这类节点常带极低倍率（0.01x），
+    单独成组便于「想看 Netflix 就切过去」，不污染日常地区组。
+  filter: "流媒体|解锁|Netflix|Disney|IPLC|IEPL"

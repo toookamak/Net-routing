@@ -31,15 +31,37 @@
   icon: United_States.png
   filter: "美国|US|USA|United States|America|🇺🇸"
 
+- code: UK
+  name: "🇬🇧 英国"
+  icon: United_Kingdom.png
+  filter: "英国|UK|United Kingdom|伦敦|🇬🇧"
+  note: 2026-10-02 实测补入：某订阅 4 个英国节点全部命中，零误伤
+
+- code: TW
+  name: "🇹🇼 台湾"
+  icon: Taiwan.png
+  filter: "台湾|台灣|Taiwan|🇹🇼"
+  note: |
+    2026-10-02 实测补入。
+    ⚠️ 不用单字「台」—— 会误伤大量非台湾节点。
+    ⚠️ 部分机场（含实测那家）用 🇨🇳 而非 🇹🇼 标注台湾，
+       所以台湾的正则靠「台湾」这个双字命中，国旗只是附加项。
+
 # 常见可选补充（需要时取消注释）
 # - code: KR
 #   name: "🇰🇷 韩国"
 #   icon: Korea.png
 #   filter: "韩国|KR|Korea|首尔|🇰🇷"
 #
-# - code: TW
-#   name: "🇹🇼 台湾"
-#   icon: Taiwan.png
-#   filter: "台湾|台|TW|Taiwan|🇹🇼"
+# - code: DE
+#   name: "🇩🇪 德国"
+#   icon: Germany.png
+#   filter: "德国|DE|Germany|法兰克福|🇩🇪"
 #
-# ⚠️ 加地区前请注意：节点名里含「台」的单字会误伤大量非台湾节点
+# ⚠️ 保持注释的原因：实测订阅里没有这两个地区的节点，
+#    取消注释会在面板上多出两个永远空转的组。
+#    等真换到有韩国/德国节点的订阅时再开。
+#
+# ⚠️ 地区组一律不写 exclude-filter。
+#    实测：排掉「低倍率」会让美国(12→0)、英国(4→0)整组消失，
+#    排掉「流媒体」会让台湾(1→0)消失。详见 docs/openclash.md 第五节 11。

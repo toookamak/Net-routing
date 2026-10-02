@@ -1,3 +1,7 @@
 node_modules/
 *.log
 .DS_Store
+
+# 路由器 SSH 会话原始输出：含配置名、机场名、节点命名形态等环境信息，
+# 是一次性诊断产物，不是项目资产。脚本本体在 test/ 下另行保留。
+test/OpenClashssh/

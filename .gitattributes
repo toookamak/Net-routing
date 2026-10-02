@@ -1,0 +1,29 @@
+# 换行符策略
+#
+# 本仓库含需要在 OpenWrt / BusyBox ash 上直接执行的 shell 脚本。
+# CRLF 会让它们直接报 '#!/bin/sh^M: not found' 或莫名其妙的语法错误，
+# 所以这里强制锁定：所有文本文件在仓库与各平台工作区一律 LF。
+#
+# 唯一的例外是 .ps1 —— Windows PowerShell 5.1 不带 BOM 时按 ANSI 读取，
+# 中文会变乱码甚至把字符串引号带崩，必须保持 CRLF + BOM。
+
+*               text=auto eol=lf
+
+*.sh            text eol=lf
+*.yaml          text eol=lf
+*.yml           text eol=lf
+*.js            text eol=lf
+*.md            text eol=lf
+*.json          text eol=lf
+*.list          text eol=lf
+.gitignore      text eol=lf
+
+*.ps1           text eol=crlf working-tree-encoding=UTF-8
+
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.ipk           binary
+*.gz            binary

@@ -252,7 +252,7 @@ Tailscale 出站不是机场节点，若参与分类会：
 
 2. **`payload` 必须写成 `[]` 而不是留空**。只写 `payload:` 会解析成 `null` 而非空数组，内核可能拒绝加载。
 
-3. **⚠️ 目前没有本地前置校验**。项目没有 `test/` 目录与校验脚本，`rulesets/*.yaml` 的 YAML 语法、`payload` 类型与每条规则格式**都没有自动检查**。远端 URL 要推送后才能取到，本地校验本可以把错误拦在 push 之前 —— 这是当前形态下最值得补回来的一块。
+3. **⚠️ 目前没有本地前置校验**。`rulesets/*.yaml` 的 YAML 语法、`payload` 类型与每条规则格式**都没有自动检查**。（`test/` 下是 OpenClash 路由器侧的排查脚本，与规则校验无关。）远端 URL 要推送后才能取到，本地校验本可以把错误拦在 push 之前 —— 这是当前形态下最值得补回来的一块。
 
 💡 `rulesets/` 随仓库一起公开。涉及不希望公开的信息时，可改用 Private 仓库，或把该条规则移到 `inline-rules.yaml` 这类不依赖外部地址的内嵌位置。
 
@@ -268,3 +268,17 @@ Tailscale 出站不是机场节点，若参与分类会：
 4. 人工核对输出的策略组名与规则目标组是否一致（无自动校验）
 
 `rules/` 目录**不需要任何改动** —— 这正是分层的意义。
+
+### 目标客户端的实际状态
+
+| 客户端 | 场景 | 产物 |
+|---|---|---|
+| FlClash | Windows / Android | ✅ `targets/flclash-override-1001.js` |
+| OpenClash | 路由器（OpenWrt） | ✅ `targets/openclash-override-1002.sh` |
+
+路由器版没有策略组分类代码：mihomo 原生支持 `include-all-proxies` + `filter` 正则，
+在运行时自己做节点分类。这是两端产物结构分叉的根因之一。
+
+适配前**必须**先读 [`docs/clients.md`](clients.md) 的差异与待验证项。
+其中最关键的一条：**FlClash 与 OpenClash 在 DNS 上的实测结论相反**，
+FlClash 客户端的限制不可套用到路由器端。

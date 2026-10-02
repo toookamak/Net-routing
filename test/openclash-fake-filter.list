@@ -1,0 +1,97 @@
+# ============================================================================
+# openclash-fake-filter.list —— fake-ip 排除清单
+#
+# 部署位置：/etc/openclash/custom/openclash_custom_fake_filter.list
+# 启用方式：uci set openclash.config.custom_fakeip_filter='1'
+#           uci set openclash.config.custom_fakeip_filter_mode='blacklist'
+#           uci commit openclash
+# 模式说明：blacklist = 匹配到的域名不返回假 IP（默认，也是本文件用的）
+#
+# ── 为什么需要 ──────────────────────────────────────────────────────
+#  fake-ip 模式下 mihomo 给域名分配一个 198.18.x.x 的假 IP，
+#  客户端拿到假 IP 后必须能通过 mihomo 还原回域名。
+#  但有些服务拿到假 IP 就无法工作：
+#    · 无法回连（服务器按来源 IP 校验）
+#    · 心跳/保活失败
+#    · 局域网广播发现（mDNS/SSDP/NetBIOS）
+#    · 真实 IP 白名单校验（银行、支付）
+#
+#  实测：当前 OpenClash 配置里 fake-ip-filter 只有一条 rule-set:oc-cn-domain，
+#  意味着下面这些场景全部会拿到假 IP → 局域网访问异常。
+#
+# ── 格式 ────────────────────────────────────────────────────────────
+#  一行一个域名，支持 mihomo 的 fake-ip-filter 语法。
+#  +.xxx    匹配 xxx 及其所有子域（含本身）
+#  *.xxx    匹配子域
+#  xxx      精确匹配
+#  # 开头是注释（OpenClash 会过滤掉）
+#  rule-set:xxx 引用规则集
+# ============================================================================
+
+# ── 局域网与本地服务 ────────────────────────────────────────────────
+# mDNS / SSDP / NetBIOS 广播发现。路由器场景下这条比客户端重要得多：
+# NAS、打印机、智能家居都靠它被发现
++.lan
++.local
++.localdomain
++.home
++.home.arpa
++.internal
++.intranet
++.private
++.test
++.arpa
+
+# ── Tailscale MagicDNS ──────────────────────────────────────────────
+# ⚠️ 刚需。本机 tailnet 里有 fnos(NAS) / nas6418 / pve 三台 homelab 机器，
+#    MagicDNS 按名字访问时 mihomo 必须能还原域名，否则
+#    「tailscale 设备名」访问全部失败（IP 访问不受影响）
++.ts.net
+ts.net
+
+# ── 系统连通性检测 ──────────────────────────────────────────────────
+# 走直连拿真 IP，否则系统判定「无网络」，进而影响依赖它的更新/唤醒逻辑
+connectivitycheck.gstatic.com
+*.msftconnecttest.com
+*.msftncsi.com
+*.gvt1.com
+*.gvt2.com
+
+# ── 时间同步 ────────────────────────────────────────────────────────
+# NTP 协议按 IP 校验，拿到假 IP 会握手失败
+time.*.com
+ntp.*.com
+*.pool.ntp.org
+*.time.windows.com
+
+# ── 局域网管理与运维面板 ────────────────────────────────────────────
+# 路由器自己的 LuCI / 管理地址，以及常见内网服务后缀
+# ⚠️ 按需修改：如果你有自建服务（HomeAssistant / Portainer / Gitea 等）
+#    把它们的内网域名加到下面，否则会拿到假 IP 导致打不开
+# nas.home.arpa
+# homeassistant.home.arpa
+
+# ── 打印机 / IoT / 智能家居 ──────────────────────────────────────────
+# 这类设备常做本地证书校验或依赖广播发现，拿到假 IP 就失联
++.hp.com
++.brother.com
++.epson.net
++.esphome.io
++.homeassistant.io
++.shelly.cloud
+*.mi.com
+*.xiaomi.com
++.oray.com
++.sunlogin.net
+
+# ── 银行与支付 ──────────────────────────────────────────────────────
+# 部分依赖真实出口 IP 校验，拿到假 IP 会误判风险
++.icbc.com.cn
++.ccb.com
++.abchina.com
++.alipay.com
++.unionpay.com
+
+# ⚠️ 提醒：本文件会随仓库一起公开。
+#    填内网域名 / 内部服务地址前先想清楚要不要公开，
+#    不适合公开的写进本地维护的副本，不要提交回仓库。

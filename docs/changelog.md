@@ -192,3 +192,32 @@ Figma 与 Notion 的规则**本次未新增** —— 它们早在 v1.0.0 基线�
 
 前身是单文件覆写脚本 `TK_ClashRuleDIY.js`。
 规则内容来自 ACL4SSR、blackmatrix7、RealSeek、Loyalsoldier、SukkaW 等第三方项目。
+
+---
+
+## 文档补充：客户端环境（2026-10-02）
+
+**本次不涉及产物与规则层变更，产物内容版本保持 v1.0.1。**
+
+### 新增 `docs/clients.md`
+
+补记本项目面向的客户端清单 —— **这是此前文档的空白**：
+README 与设计说明此前只提 FlClash，未记录路由器侧实际在用的 OpenClash。
+
+- **客户端清单** —— OpenClash（路由器 / OpenWrt）、FlClash（Windows / Android），含项目地址
+- **DNS 行为实测结论相反** —— FlClash 无法把 DNS 查询送进代理（`respect-rules: true` 无效），
+  OpenClash + 较新 mihomo 内核实测国际 DoH 经代理可达。
+  强调这是**客户端限制、不是 mihomo 通病**，排查前先确认用的是哪个客户端
+- **覆写机制执行顺序相反** —— FlClash 是「产物脚本 → 客户端覆写」，**客户端赢**；
+  OpenClash 的 `openclash_custom_overwrite.sh` 官方注释写明在客户端自身脚本**之后**执行，
+  **自定义覆写赢**。同时记录 OpenClash 覆写可用的 `ruby_*` 辅助函数清单
+- **顺带重申与 Clash Verge Rev 的「合并 / 替换」不是一回事** —— 两者都没有这个概念
+- **待验证事项** —— 只读探针 `test/openclash-probe.sh` 的用法，以及适配前待确认的 5 条：
+  provider `path` 是否重映射、TUN / IPv6 三层防护、「区域绕过 = 大陆」的实现层次、
+  `PROCESS-NAME` 行为、Tailscale 策略路由
+
+### 连带更新
+
+- `README.md` —— 目录结构补 `docs/clients.md`；「当前能力」注明路由器侧尚无产物
+- `docs/design.md` —— 第九节补「目标客户端的实际状态」表与指向 `docs/clients.md` 的链接；
+  第八节订正「项目没有 `test/` 目录」这一失效描述（`test/` 下实为 OpenClash 排查脚本）

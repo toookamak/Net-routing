@@ -76,9 +76,19 @@ net-routing/
 │
 ├── targets/
 │   ├── flclash-override-1001.js  ★ 粘进 FlClash 的成品（自包含单文件）
-│   └── flclash-override-1001.md  ★ 产物的功能与规则说明（改配置前先看这份）
+│   ├── flclash-override-1001.md  ★ 产物的功能与规则说明（改配置前先看这份）
+│   ├── openclash-override-1002.sh ★ 粘进 OpenClash 覆写模块的成品（自包含）
+│   ├── openclash-override-1002.md ★ 路由器侧产物的功能与规则说明
+│   └── openclash-routes.yaml     · 路由器产物的数据段（可 diff；.sh 由它内嵌而成）
+│
+├── test/                      路由器侧的只读探针与验证脚本
+│   ├── openclash-probe.sh         · 环境与配置现状快照（纯只读）
+│   ├── openclash-verify-groups.sh · 策略组语法与正则命中率验证（只写 /tmp）
+│   └── openclash-fake-filter.list · fake-ip 排除清单参考
 │
 └── docs/
+    ├── clients.md              客户端清单与各端差异（FlClash / OpenClash）
+    ├── openclash.md            OpenClash 速查：覆写链、机制、坑、安全回滚
     ├── ruleset-sources.md      规则集来源清单
     ├── design.md               设计说明
     └── changelog.md            版本历史
@@ -152,7 +162,19 @@ payload:
 
 ### 当前能力
 
-**客户端**：FlClash（Win / macOS / Linux / Android / iOS）。产物是标准 mihomo 覆写脚本。
+**客户端一：FlClash**（Win / macOS / Linux / Android / iOS）。产物是标准 mihomo 覆写脚本。
+
+**客户端二：OpenClash**（OpenWrt 路由器）。产物是自包含的 shell 覆写脚本，整段粘贴进
+LuCI 的「覆写模块」即可，两端共用 `rules/*.yaml` 这一层规则定义。
+
+> 📌 两端产物在三点上**有意分叉**（策略组实现方式、地区组是否排除特性节点、IPv6 处理），
+> 原因与实测数据见 [`docs/clients.md`](docs/clients.md) 与
+> [`docs/openclash.md`](docs/openclash.md)。
+>
+> 📌 路由器侧产物目前只服务 **homelab 设备**（NAS / PVE / 服务器）；
+> 个人电脑与手机各自用 FlClash。
+
+### FlClash 侧能力
 
 - 54 条分流规则，46 个规则集引用
 - 最多 21 个策略组（**实际数量随订阅节点动态变化**：地区组与特性组按订阅中实际出现的节点生成）
