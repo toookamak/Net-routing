@@ -28,8 +28,14 @@
 #  执行顺序：覆写模块在第 ③ 步，本脚本在第 ④ 步（最后），所以本脚本的
 #  策略组最终生效，不会被覆写模块覆盖。
 #
-#  内容版本：v1.1.0    文件大版本：1002（2026-10-02）
+#  内容版本：v1.2.0    文件大版本：1002（2026-10-02）
 #  规模：22 个策略组
+#
+#  ── 版本标记 ────────────────────────────────────────────────────
+#  部署后 grep 一下就知道跑的是哪一版：
+#      grep 'net-routing-groups artifact' /tmp/openclash.log | tail -3
+#  配套的 .conf（覆写模块，负责规则/规则集/DNS）的标记在
+#      grep -n 'net-routing artifact' /tmp/yaml_overwrite.sh
 #
 #  ── 安全机制 ────────────────────────────────────────────────────
 #    备份 → 交叉引用自检 → 写盘 → clash_meta -t 离线校验 → 失败自动回滚
@@ -311,6 +317,7 @@ if [ ! -s "$NR_DATA" ]; then
 fi
 
 # ---------- 2. 备份 ----------
+nr_log "net-routing-groups artifact: 1002 v1.2.0 (proxy-groups only)"
 cp -f "$CONFIG_FILE" "$NR_BACKUP" 2>/dev/null
 if [ ! -f "$NR_BACKUP" ]; then
     nr_log "ABORT: cannot create backup, refusing to modify"
