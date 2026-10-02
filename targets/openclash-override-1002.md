@@ -1,8 +1,58 @@
 # openclash-override-1002.conf —— 功能与规则说明
 
-> 本文与 [`openclash-override-1002.conf`](./openclash-override-1002.conf) 同级配套，描述该覆写模块**做了什么**、**产出什么配置**、以及**改的时候该动哪里**。
+> 本文与 [`openclash-override-1002.conf`](./openclash-override-1002.conf)、
+> [`openclash-groups-1002.sh`](./openclash-groups-1002.sh) 同级配套，
+> 描述路由器侧覆写**做了什么**、**产出什么配置**、以及**改的时候该动哪里**。
 >
-> **文件大版本：1002（2026-10-02 立项）** ｜ **内容版本：v1.1.0** ｜ **规模：51 条分流规则 / 43 个规则集 / 最多 22 个策略组**
+> **文件大版本：1002（2026-10-02 立项）** ｜ **内容版本：v1.1.0** ｜ **规模：51 条分流规则 / 43 个规则集 / 22 个策略组**
+
+---
+
+## 〇之前、部署架构：两个文件各管一段
+
+⚠️ **策略组不在 `.conf` 里**，拆成了两个文件。这是实测踩坑后的决定，不是设计偏好。
+
+| 文件 | 部署到 | 负责 | 为什么 |
+|---|---|---|---|
+| `openclash-override-1002.conf` | 覆写模块（上传） | `rules!` / `rule-providers` / `dns` / 顶层键 / `[General]` 开关 | 这几项在覆写模块里**实测正常** |
+| `openclash-groups-1002.sh` | `/etc/openclash/custom/openclash_custom_overwrite.sh` | **仅 `proxy-groups`** | 覆写模块的解析器会吃掉 `filter` |
+
+### 为什么策略组必须拆出去（2026-10-02 实测）
+
+覆写模块的 `[YAML]` 块在处理 `proxy-groups!`（数组套对象整体替换）时，
+**会把元素内「值里含竖线 `|`」的键整行丢掉**：
+
+| 组 | 合并后剩余的键 | 结果 |
+|---|---|---|
+| `⚡ 延迟优选` | `type, include-all-proxies, empty-fallback, url, interval, tolerance, lazy` | `exclude-filter` 消失 |
+| `🇭🇰 香港` | `type, include-all-proxies, empty-fallback, url, interval, tolerance, lazy` | `filter` 消失 |
+| `💰 低倍率节点` | `type, include-all-proxies, empty-fallback` | `filter` 消失 |
+
+**活下来的键值里都没有 `|`，死掉的值里全是 `|`。** `|` 是 YAML 的块标量指示符，
+OpenClash 那个块的解析器是逐行处理的，不是完整 YAML 解析器。
+
+症状：面板上每个组的候选池都是全部节点（实测 `31/51`），地区组的 url-test
+在全部节点里挑最快，**「选香港」选出来的是新加坡节点**。
+
+`rules!` 里的规则不含 `|`，所以 51 条规则全部正常 —— 这也反过来印证了原因。
+
+> **绕法 A 走不通。** 把 `|` 换成 `\n` 让 mihomo 按多行拆多个正则？
+> 不行 —— 同一个解析器不处理引号内的转义序列，`\n` 会原样传下去，
+> mihomo 收到的是字面反斜杠 n。
+>
+> 所以只能让策略组走 Psych 直接读写 YAML，绕开那个解析器。
+
+### 执行顺序
+
+```
+① yml_change.sh          端口/模式/TUN/DNS/Sniffer/认证（来自 UCI）
+② yml_rules_change.sh    规则注入、自定义规则、GitHub CDN 重写
+③ /tmp/yaml_overwrite.sh ← 覆写模块 .conf 编译产物（rules/providers/dns）
+④ openclash_custom_overwrite.sh ← .sh 脚本（proxy-groups）
+启动内核
+```
+
+`④` 在 `③` 之后，两边不重叠，各管各的。
 
 ---
 

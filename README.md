@@ -77,7 +77,8 @@ net-routing/
 ├── targets/
 │   ├── flclash-override-1001.js  ★ 粘进 FlClash 的成品（自包含单文件）
 │   ├── flclash-override-1001.md  ★ 产物的功能与规则说明（改配置前先看这份）
-│   ├── openclash-override-1002.conf ★ 上传到 OpenClash 覆写模块的成品（自包含）
+│   ├── openclash-override-1002.conf ★ 上传到覆写模块：规则/规则集/DNS
+│   ├── openclash-groups-1002.sh    ★ 贴进 custom 目录：仅策略组（绕开覆写模块解析器）
 │   ├── openclash-override-1002.md ★ 路由器侧产物的功能与规则说明
 │   └── openclash-routes.yaml     · 路由器产物的数据源（可 diff）
 │
