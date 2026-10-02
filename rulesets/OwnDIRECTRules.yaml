@@ -37,6 +37,29 @@ payload:
   - DOMAIN-SUFFIX,fnos.net
   - DOMAIN-SUFFIX,fnnas.com
 
+  # RayLink 远程控制
+  #
+  # 域名不是从官网抄的（本机 DNS 走 fake-ip，查不出来），是从客户端自己的日志里
+  # 扒出来的真实连接目标：
+  #   %ProgramData%\RayLink\service_config.json → api. / ws.raysync.cloud
+  #   %ProgramData%\RayLink\debug_0_*.log       → relay.raysync.cloud:443   （TCP 中继）
+  #                                              raylink-root.raysync.cloud（SDN 根节点）
+  #                                              stun.raylink.live          （自建 STUN）
+  #                                              minio-api.raylink.live     （图片/活动资源）
+  #   %ProgramData%\RayLink\license_0.log       → fly.cloudtalkers.com      （授权/登录）
+  #
+  # raysync 是 RayLink 自研传输协议的云服务；官网 www.raylink.live 只是下载页，
+  # 真正跑远控画面、文件传输、语音的是 *.raysync.cloud。走代理纯属白吃流量。
+  - DOMAIN-SUFFIX,raysync.cloud
+  - DOMAIN-SUFFIX,raylink.live
+  # 授权服务器是第三方 SDK 提供的，这里只出现 fly. 一个子域，
+  # 所以用精确匹配，不整个吃掉 cloudtalkers.com（该域可能有别的产品共用）
+  - DOMAIN,fly.cloudtalkers.com
+  #
+  # 刻意不加的：
+  #   qq.com / qlogo.cn  微信登录的第三方，已被 GEOSITE,cn 覆盖
+  #   www.qingjiaocloud.com  客户端内活动 banner 的落地页，不参与远控链路
+
   # ---------------------------------------------------------------------
   # ① 域名后缀：匹配 example.com 及其所有子域名
   #    适合：整个站点（含所有子域）都该直连

@@ -2,28 +2,31 @@
 
 > 本文件为手工整理，核对上游规则集是否变更时请手动更新。
 >
-> 最近检查：2026-10-01 10:20:06 UTC（本次仅复核新增的 `Twitter` 规则集，其余条目沿用上次结果）
+> 最近检查：2026-10-02 10:06:40 UTC
+> （本次复核三个自建规则集 `CustomDirectRules` / `CustomProxyRules` / `CustomRejectRules` 的存活状态，
+>  并按 `rules/providers.yaml` 订正 `applications`、`Reject_domainset`、`CDN_domainset`、
+>  `Download_domainset` 的 format/behavior 列；其余上游条目沿用 2026-10-01 的结果）
 
 ## 概览
 
 | 项 | 数量 |
 |---|---|
 | 远程规则集 | 45 |
-| 存活 | 42 |
-| **失效** | **3** |
+| 存活 | 45 |
+| **失效** | **0** |
 | 内嵌规则集（无外部依赖） | 15 |
 | 已定义但未被任何规则引用 | 0 |
 
-## ⚠️ 失效的规则集（3）
+## ✅ 失效的规则集（0）
 
-> mihomo 遇到失效的 provider **不会报错，只会静默空载**。
-> 症状是「订阅更新成功但该类流量分流不生效」，需要手工换源。
-
-| 规则集 | 状态 | 引用位置 | 地址 |
-|---|---|---|---|
-| `CustomProxyRules` | 404 | office | https://raw.githubusercontent.com/toookamak/Net-routing/refs/heads/main/rulesets/OwnPROXYRules.yaml |
-| `CustomDirectRules` | 404 | custom-direct | https://raw.githubusercontent.com/toookamak/Net-routing/refs/heads/main/rulesets/OwnDIRECTRules.yaml |
-| `CustomRejectRules` | 404 | adblock | https://raw.githubusercontent.com/toookamak/Net-routing/refs/heads/main/rulesets/OwnREJECTRules.yaml |
+> 2026-10-02 复核：三个自建规则集此前被标成 404，实际早已可访问（仓库转公开后即可拉取）。
+> 下面是当时的判断，仅作历史留档，**当前不适用**。
+>
+> | 规则集 | 当时状态 | 引用位置 | 地址 |
+> |---|---|---|---|
+> | ~~`CustomProxyRules`~~ | ~~404~~ → 现 ✅ 200（6112B） | office | .../rulesets/OwnPROXYRules.yaml |
+> | ~~`CustomDirectRules`~~ | ~~404~~ → 现 ✅ 200（4002B） | custom-direct | .../rulesets/OwnDIRECTRules.yaml |
+> | ~~`CustomRejectRules`~~ | ~~404~~ → 现 ✅ 200（3155B） | adblock | .../rulesets/OwnREJECTRules.yaml |
 
 ## 全部规则集
 
@@ -37,14 +40,14 @@
 | `AppleCNCDN_no_ip` | text | domain | ok | Sukka (ruleset.skk.moe) | direct | ✅ 200 |
 | `Github` | yaml | classical | 438B | blackmatrix7/ios_rule_script | office | ✅ 200 |
 | `Origin` | yaml | classical | 1274B | blackmatrix7/ios_rule_script | game | ✅ 200 |
-| `CustomProxyRules` | yaml | classical | — | toookamak/Net-routing（自建·本仓库） | office | ❌ 404 |
-| `CustomDirectRules` | yaml | classical | — | toookamak/Net-routing（自建·本仓库） | custom-direct | ❌ 404 |
+| `CustomProxyRules` | yaml | classical | 6112B | toookamak/Net-routing（自建·本仓库） | office | ✅ 200 |
+| `CustomDirectRules` | yaml | classical | 4002B（本次新增 3 条 RayLink 规则，推送后会变大） | toookamak/Net-routing（自建·本仓库） | custom-direct | ✅ 200 |
 | `Reject_ip` | yaml | classical | 1167B | RealSeek/Clash_Rule_DIY | adblock | ✅ 200 |
 | `Reject_no_ip` | yaml | classical | 1068B | RealSeek/Clash_Rule_DIY | adblock | ✅ 200 |
-| `Reject_domainset` | yaml | classical | 840525B | RealSeek/Clash_Rule_DIY | adblock | ✅ 200 |
+| `Reject_domainset` | yaml | domain | 840525B | RealSeek/Clash_Rule_DIY | adblock | ✅ 200 |
 | `Reject_no_ip_drop` | yaml | classical | 109B | RealSeek/Clash_Rule_DIY | adblock | ✅ 200 |
 | `Reject_no_ip_no_drop` | yaml | classical | 427B | RealSeek/Clash_Rule_DIY | adblock | ✅ 200 |
-| `CustomRejectRules` | yaml | classical | — | toookamak/Net-routing（自建·本仓库） | adblock | ❌ 404 |
+| `CustomRejectRules` | yaml | classical | 3155B | toookamak/Net-routing（自建·本仓库） | adblock | ✅ 200 |
 | `MicrosoftCDN_no_ip` | yaml | classical | 240B | RealSeek/Clash_Rule_DIY | cdn | ✅ 200 |
 | `Docker` | yaml | classical | 258B | blackmatrix7/ios_rule_script | office | ✅ 200 |
 | `Telegram_ip` | text | classical | 236B | ACL4SSR/ACL4SSR | office | ✅ 200 |
@@ -68,12 +71,12 @@
 | `Sony` | text | classical | 116B | ACL4SSR/ACL4SSR | game | ✅ 200 |
 | `Nintendo` | text | classical | 146B | ACL4SSR/ACL4SSR | game | ✅ 200 |
 | `Stream_ip` | yaml | classical | 234B | RealSeek/Clash_Rule_DIY | cdn | ✅ 200 |
-| `CDN_domainset` | yaml | classical | 18532B | RealSeek/Clash_Rule_DIY | cdn | ✅ 200 |
+| `CDN_domainset` | yaml | domain | 18532B | RealSeek/Clash_Rule_DIY | cdn | ✅ 200 |
 | `CDN_no_ip` | yaml | classical | 510B | RealSeek/Clash_Rule_DIY | cdn | ✅ 200 |
-| `Download_domainset` | yaml | classical | 3599B | RealSeek/Clash_Rule_DIY | cdn | ✅ 200 |
+| `Download_domainset` | yaml | domain | 3599B | RealSeek/Clash_Rule_DIY | cdn | ✅ 200 |
 | `Download_no_ip` | yaml | classical | 125B | RealSeek/Clash_Rule_DIY | cdn | ✅ 200 |
 | `GameDownload` | yaml | classical | 546B | blackmatrix7/ios_rule_script | cdn | ✅ 200 |
-| `applications` | text | classical | 498B | Loyalsoldier/clash-rules | traffic | ✅ 200 |
+| `applications` | yaml | classical | 498B | Loyalsoldier/clash-rules | traffic | ✅ 200 |
 
 ## 说明
 
