@@ -77,10 +77,9 @@ net-routing/
 ├── targets/
 │   ├── flclash-override-1001.js  ★ 粘进 FlClash 的成品（自包含单文件）
 │   ├── flclash-override-1001.md  ★ 产物的功能与规则说明（改配置前先看这份）
-│   ├── openclash-override-1002.conf ★ 上传到覆写模块：规则/规则集/DNS
-│   ├── openclash-groups-1002.sh    ★ 贴进 custom 目录：仅策略组（绕开覆写模块解析器）
+│   ├── openclash-override-1002.sh  ★ 贴进 LuCI 覆写模块的自定义覆写脚本（单文件全包）
 │   ├── openclash-override-1002.md ★ 路由器侧产物的功能与规则说明
-│   └── openclash-routes.yaml     · 路由器产物的数据源（可 diff）
+│   └── openclash-routes.yaml     · 路由器产物的数据源（可 diff，.sh 由它拼装）
 │
 ├── test/                      路由器侧的只读探针与验证脚本
 │   ├── openclash-probe.sh         · 环境与配置现状快照（纯只读）
@@ -165,7 +164,7 @@ payload:
 
 **客户端一：FlClash**（Win / macOS / Linux / Android / iOS）。产物是标准 mihomo 覆写脚本。
 
-**客户端二：OpenClash**（OpenWrt 路由器）。产物是自包含的 INI 覆写模块，上传到
+**客户端二：OpenClash**（OpenWrt 路由器）。产物是自包含的覆写脚本，贴进
 LuCI 的「覆写模块」即可，两端共用 `rules/*.yaml` 这一层规则定义。
 
 > 📌 两端产物在三点上**有意分叉**（策略组实现方式、地区组是否排除特性节点、IPv6 处理），
