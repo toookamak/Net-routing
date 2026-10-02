@@ -86,29 +86,43 @@ uci:set("openclash", sid, "name", section_name)
 uci:set("openclash", sid, "type", "file")
 ```
 
-> ❌ **不要把 shell 脚本用上传功能传上去。**
-> 它会被落到 `/etc/openclash/overwrite/`，注册成 INI 覆写模块，
-> 然后被当 INI 解析 —— 表现为「保存成功但什么都没发生」。
-> 上传时文件名后缀（txt/conf）就是线索：那是 INI 配置文件的习惯后缀。
+> ⚠️ **覆写模块 ≠ 只能改端口开关。**
+> `[YAML]` 块提供了一套完整的合并算子（官方 `overwrite/default` 参考文件里有速查表）：
 >
-> `action_overwrite_file_list` 会把两个目录的文件混在一个列表里展示，
-> 所以界面上看着像同一个功能，实际落点完全不同。
+> | 写法 | 作用 |
+> |---|---|
+> | `key` | 默认合并，Hash 递归合并，其他类型直接覆盖 |
+> | `key!` | **强制覆盖整个值** |
+> | `key+` / `+key` | 数组后置 / 前置 |
+> | `key-` | 数组差集删除 / 删键（值为空或 `~`） |
+> | `key*` | 按 `where` / `set` 批量条件更新 |
+>
+> 官方示例里就有 `rules!:` 替换整条规则链。所以**本项目改用覆写模块实现**，
+> 不用自定义覆写脚本 —— 理由见 `targets/openclash-override-1002.md` 第一节。
+>
+> `action_overwrite_file_list` 会把 `/etc/openclash/custom/openclash_custom_overwrite.sh`
+> 和 `/etc/openclash/overwrite/` 里的文件混在一个列表里展示，界面上看着像同一个功能。
+> 两个目录的**落点和格式完全不同**。
 
-**本项目只用第 ④ 步的自定义覆写脚本**，因为要替换 22 个策略组 + 51 条规则 + DNS 段，
-这些用 INI 模块表达不了。
+**两种覆写方式怎么选**
 
-### 两种把脚本送进路由器的方式
+| 需求 | 用哪个 |
+|---|---|
+| 替换整条 rules / 全部策略组、合并 rule-providers、改 dns 段 | **覆写模块 `[YAML]` 块** ← 本项目 |
+| 在既有 `rules` 数组里插几条规则、临时改端口 | 覆写模块（够用）或自定义覆写脚本 |
+| 任意 Ruby 逻辑（跨段条件判断、动态计算） | 自定义覆写脚本 |
 
-**方式一：LuCI 可编辑区粘贴**（推荐）
-覆写模块页面里编辑 `openclash_custom_overwrite.sh`，全选旧内容 → 粘贴新内容 → 保存。
-41KB 浏览器吃得下。保存后验证落点：
+### 怎么把文件送进路由器
+
+**覆写模块**（本项目采用）：LuCI → 覆写模块 → 上传 `.conf` → 打开「启用」→ 重启。
+
+编译结果肉眼可读，这是它相对自定义脚本最大的优势：
 
 ```sh
-wc -c /etc/openclash/custom/openclash_custom_overwrite.sh   # 应约 41499
-head -3 /etc/openclash/custom/openclash_custom_overwrite.sh
+cat /tmp/yaml_overwrite.sh
 ```
 
-**方式二：PowerShell 管道直写**（粘贴嫌长时用）
+**自定义覆写脚本**：覆写模块页面里编辑 `openclash_custom_overwrite.sh`，或走管道：
 
 ```powershell
 ssh root@192.168.31.1 "cp /etc/openclash/custom/openclash_custom_overwrite.sh /etc/openclash/custom/openclash_custom_overwrite.sh.stock"
@@ -116,7 +130,8 @@ Get-Content "F:\Git\Net-routing\targets\openclash-override-1002.sh" -Raw |
   ssh root@192.168.31.1 "cat > /etc/openclash/custom/openclash_custom_overwrite.sh"
 ```
 
-⚠️ PowerShell 不支持 `cmd < file` 语法，必须用 `Get-Content -Raw |`。
+⚠️ PowerShell 不支持 `ssh ... < 文件` 的写法（`<` 是本地重定向，不作用于远程命令），
+必须 `Get-Content -Raw |`。
 
 ---
 

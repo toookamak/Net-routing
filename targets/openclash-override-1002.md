@@ -1,6 +1,6 @@
-# openclash-override-1002.sh —— 功能与规则说明
+# openclash-override-1002.conf —— 功能与规则说明
 
-> 本文与 [`openclash-override-1002.sh`](./openclash-override-1002.sh) 同级配套，描述该覆写脚本**做了什么**、**产出什么配置**、以及**改的时候该动哪里**。
+> 本文与 [`openclash-override-1002.conf`](./openclash-override-1002.conf) 同级配套，描述该覆写模块**做了什么**、**产出什么配置**、以及**改的时候该动哪里**。
 >
 > **文件大版本：1002（2026-10-02 立项）** ｜ **内容版本：v1.1.0** ｜ **规模：51 条分流规则 / 43 个规则集 / 最多 22 个策略组**
 
@@ -11,20 +11,17 @@
 **文件名末尾的数字是「大版本」，取立项当天的日期。**
 
 ```
-openclash-override-1002.sh
+openclash-override-1002.conf
                   ^^^^  =  1002  →  2026-10-02 立项
 ```
 
 | 改动类型 | 该怎么做 |
 |---|---|
-| 换规则集源、改顺序、改参数、修 bug | **直接改 `openclash-override-1002.sh`，文件名不变** |
-| 重大结构调整（模块拆分、策略组结构重做、规则链整体重排） | 以**当天日期**另存为新大版本文件 |
+| 换规则集源、改顺序、改参数、修 bug | **直接改 `openclash-override-1002.conf`，文件名不变** |
+| 重大结构调整（策略组结构重做、规则链整体重排） | 以**当天日期**另存为新大版本文件 |
 
 > 文件头部的 `内容版本：v1.1.0` 是**内容版本**（每次有实质改动就递增），
 > 与文件名的大版本是两回事，不要混用。
->
-> 本项目**没有构建脚本**。`@generated:begin ROUTES` 与 `@generated:end ROUTES`
-> 之间的数据段由人工/AI 依据 `rules/*.yaml` 渲染写入，标记之外是逻辑可直接维护。
 
 ---
 
@@ -32,17 +29,61 @@ openclash-override-1002.sh
 
 | 项 | 说明 |
 |---|---|
-| 类型 | OpenClash 自定义覆写脚本（Custom Overwrite Module） |
-| 入口 | `/etc/init.d/openclash` 处理完自身所有脚本后调用，`$1` = 配置文件路径 |
-| 位置 | LuCI → 服务 → OpenClash → **覆写模块** → 覆写设置（整段粘贴） |
-| 依赖 | mihomo 内核（`-t` 离线校验）；`ruby` + `ruby-yaml`（OpenClash 安装依赖自带） |
-| 产物 | 自包含单文件，路由数据以 heredoc 内嵌，**不依赖任何外部文件** |
+| 类型 | OpenClash **覆写模块**（INI 格式，`.conf` / `.txt` 均可） |
+| 位置 | `/etc/openclash/overwrite/<文件名>` |
+| 部署 | LuCI → 服务 → OpenClash → **覆写模块** → 上传 → 把「启用」打开 |
+| 执行时机 | 启动流程**第 ③ 步**（`yml_change.sh` → `yml_rules_change.sh` 之后） |
+| 产物 | 自包含单文件，`[YAML]` 块内是纯 YAML 声明 |
 
 ### 怎么用
 
 1. 浏览器打开 `http://192.168.31.1` → 服务 → OpenClash → 覆写模块；
-2. 全选原有内容，粘贴本文件全文；
-3. 保存 → 重启 OpenClash。
+2. 上传 `openclash-override-1002.conf`（后缀 `.txt` / `.conf` 都收）；
+3. 在模块列表里把这一条的**「启用」打开**；
+4. 重启 OpenClash。
+
+### 合并算子速查
+
+`[YAML]` 块用的是 OpenClash 自定义的合并算子（来自官方 `overwrite/default` 参考文件）：
+
+| 写法 | 作用 |
+|---|---|
+| `key` | 默认合并，Hash 递归合并，其他类型直接覆盖 |
+| `key!` | **强制覆盖整个值**，不做递归 |
+| `key+` / `+key` | 数组后置追加 / 前置插入 |
+| `key-` | 数组差集删除 / 非数组则删键（值为空或 `~`） |
+| `key*` | 按 `where` / `set` 批量条件更新 |
+| `<key>` | 键名含特殊字符时的替代写法，支持同样的后缀 |
+
+本文件用到的算子：
+
+| 位置 | 写法 | 为什么这么写 |
+|---|---|---|
+| `rules!:` | 强制覆盖 | 订阅自带 516 条，要整条换掉 |
+| `proxy-groups!:` | 强制覆盖 | 22 个组全部自建，不留订阅的 3 个 |
+| `rule-providers:` | **默认合并** | 要保留 OpenClash 注入的 `oc-cn-domain` |
+| `nameserver!:` 等 | 强制覆盖 | 整段换掉，不用增量删 |
+| `fallback-:` / `fallback-filter-:` | 删键 | 订阅自带的这两个是坏的（见第六节） |
+| `fake-ip-filter+:` | **数组追加** | 追加 27 条，保留原有的 `rule-set:oc-cn-domain` |
+| `nameserver-policy:` | 默认合并 | Hash 递归合并 |
+
+### 为什么用覆写模块而不是自定义覆写脚本
+
+两者都能做同样的事，覆写模块更合适：
+
+| | 覆写模块（本文件） | 自定义覆写脚本 |
+|---|---|---|
+| 写法 | 纯 YAML 声明 | shell + Ruby |
+| 表达替换整段 | `rules!:` 一个键 | 自己写 load / 改 / dump |
+| 出错可见性 | 编译产物 `/tmp/yaml_overwrite.sh` 可直接看 | `ruby.sh` 带 `2>/dev/null`，**屏幕完全静默** |
+| 转义坑 | 无 | shell/Ruby/YAML 三层引号嵌套 |
+| emoji | YAML 原生 | Psych 默认转义成 `\U0001F1ED` |
+| 执行位置 | 第 ③ 步 | 第 ④ 步（最后） |
+
+**还有一个隐蔽的好处**：覆写模块跑在 `yml_rules_change.sh` **之后**。
+自定义规则机制（`openclash_custom_rules.list`）会在那个脚本里校验每条规则的
+目标组是否存在，不存在就**静默丢弃**（只在日志留一行 WARN）。
+把规则放在覆写模块里就完全绕开了这个陷阱。
 
 ### 与仓库其它部分的关系
 
@@ -51,14 +92,11 @@ rules/*.yaml        ← 唯一事实来源（规则、策略组、地区、关�
       │
       │  人工/AI 渲染
       ▼
-targets/openclash-override-1002.sh   ← 本文件描述的对象（产物）
-      │  粘贴进 LuCI 覆写模块
+targets/openclash-routes.yaml    · 数据源（可 diff，本 .conf 由它拼装）
+      │
       ▼
-OpenClash → mihomo 内核
+targets/openclash-override-1002.conf  ← 本文件描述的对象（产物，上传到 LuCI）
 ```
-
-**改规则要改 `rules/*.yaml` 再重新渲染产物，不要直接改 `@generated` 标记之间的数据段。**
-标记之外是逻辑段，可直接维护。
 
 ---
 
@@ -66,27 +104,26 @@ OpenClash → mihomo 内核
 
 在 OpenClash 生成的配置之上做 4 件事：
 
-| # | 动作 | 对象 | 方式 |
+| # | 动作 | 对象 | 合并方式 |
 |---|---|---|---|
-| 1 | 覆盖顶层键 | `mode` / `unified-delay` / `tcp-concurrent` / `geodata-mode` / `find-process-mode` | 直接赋值 |
-| 2 | **浅合并** | `dns` 段 | 保留 OpenClash 原有的 `listen` / `enhanced-mode` / `fake-ip-range`；`fake-ip-filter` 叠加而非替换 |
-| 3 | **整体替换** | `proxy-groups` | 22 个自定义策略组 |
-| 4 | **合并 / 替换** | `rule-providers` / `rules` | 保留 OpenClash 注入的 `oc-cn-domain`；规则整体换成 51 条 |
+| 1 | 覆盖顶层键 | `mode` / `unified-delay` / `tcp-concurrent` / `geodata-mode` | 默认合并 |
+| 2 | **合并** | `dns` 段 | 保留 OpenClash 原有的 `listen` / `enhanced-mode` / `fake-ip-range`；`fake-ip-filter` 追加 |
+| 3 | **强制覆盖** | `proxy-groups` | 22 个自定义策略组 |
+| 4 | **合并 / 覆盖** | `rule-providers` / `rules` | 保留 OpenClash 注入的 `oc-cn-domain`；规则整条换成 51 条 |
 
-### 与 flclash 版的三个有意分叉
+另外在 `[General]` 段设置两个插件级开关：
 
-| # | flclash 版 | 路由器版 | 原因 |
-|---|---|---|---|
-| 1 | `classifyNodes()` 单趟遍历做节点分类，正则匹配地区/家宽/低倍率/通知 | **不写分类代码**，全用 mihomo 原生 `include-all-proxies` + `filter` | mihomo 运行时自己做正则分类，路由器上没有 JS，Ruby 也不必重写这套逻辑 |
-| 2 | 地区组 `exclude-filter` 排掉家宽/低倍率 | **地区组一律不设 `exclude-filter`** | 实测：排低倍率让美国 12→0、英国 4→0；排流媒体让台湾 1→0。三个地区组会消失 |
-| 3 | TUN 模式 + `tun.inet6-route-address` 三层封堵 IPv6 | **无 TUN 段，无 IPv6 封堵** | 路由器靠 iptables/tproxy 接管，没有 TUN。IPv6 需在系统层单独处理（见第九节） |
+| 开关 | 值 | 作用 |
+|---|---|---|
+| `FIND_PROCESS_MODE` | `off` | 路由器上进程规则只对路由器自身生效，留着只增加每连接开销 |
+| `GITHUB_ADDRESS_MOD` | `https://cdn.jsdelivr.net/` | 43 个规则集大半来自 `raw.githubusercontent.com`，走 CDN 避免超时导致 provider 静默空载 |
 
 ### 绝不做的事
 
 | 对象 | 原因 |
 |---|---|
 | `proxies` | 订阅生成的节点，含服务器与密码 |
-| 任何端口 | OpenClash 生成防火墙规则时按端口配对，改了会失配 |
+| 任何端口 | OpenClash 生成防火墙规则时按端口配对 |
 | `dns.listen` | 必须是 `0.0.0.0:7874`，dnsmasq 已配好转发到它。**写错 = 全局域网 DNS 瘫痪** |
 | `authentication` | 面板密钥 |
 | `tun` 段 | 混合模式自带（`auto-route: false`，流量靠 iptables 接管） |
@@ -427,60 +464,64 @@ DNS 送得进隧道**。
 
 ---
 
-## 七、安全机制（三重）
+## 七、怎么确认生效 / 出问题怎么定位
 
-| # | 机制 | 触发条件 | 结果 |
-|---|---|---|---|
-| 1 | **备份** | 任何写操作之前 | `cp` 到 `${CONFIG_FILE}.nr-bak`，失败则拒绝修改 |
-| 2 | **交叉引用自检** | `RULE-SET` 指向不存在的 provider / 规则指向不存在的组 / 组引用不存在的组 / 兜底两条不在末尾 | 打印前 20 条问题 → **中止，不写任何文件** |
-| 3 | **离线校验门** | 写盘后 | `clash_meta -t -d /etc/openclash -f <配置>`，不通过则 `cp` 回备份 |
+### 编译产物可直接看
 
-> **第 2 条为什么重要**：mihomo 对「规则指向不存在的 rule-provider」是**硬失败**
-> （整份配置加载不了，内核起不来），对「`format`/`behavior` 声明错」才是静默空载。
-> 这两类表现完全不同，后者只能靠人工核对上游规则集格式。
-
-> **第 3 条注意 `-d /etc/openclash` 不能省** —— 不带 home 目录找不到已下载的 geo 库，
-> 会误报失败。
-
-### ⚠️ 失败是完全静默的
-
-OpenClash 的 `ruby.sh` 里 `run_ruby_part` 带 `2>/dev/null`，
-**脚本出错时屏幕上不会有任何输出**，只写 `/tmp/openclash.log`。
+OpenClash 会把覆写模块**编译成 shell 脚本**再执行：
 
 ```sh
-grep '\[net-routing\]' /tmp/openclash.log | tail -30
+cat /tmp/yaml_overwrite.sh
 ```
 
-正常输出应该长这样：
+这是覆写模块相对自定义脚本最大的优势 —— **编译结果肉眼可读**。
+自定义脚本里 Ruby 出错会被 `2>/dev/null` 吞掉、屏幕完全静默，而这里能直接看到 OpenClash 到底理解成了什么。
 
+### 运行日志
+
+```sh
+grep -iE 'overwrite|error|fail' /tmp/openclash.log | tail -30
 ```
-[net-routing] loaded config, routes sections: 4
-[net-routing] basic: mode, unified-delay, tcp-concurrent, geodata-mode, find-process-mode
-[net-routing] dns merged, fake-ip-filter = 28 entries, listen kept = 0.0.0.0:7874
-[net-routing] proxy-groups: 3 -> 22
-[net-routing] rule-providers: +43, preserved from OpenClash: oc-cn-domain
-[net-routing] rules: 516 -> 51
-[net-routing] self-check OK (51 rules, 22 groups, 44 providers)
-[net-routing] written 40218 bytes
-[net-routing] validation PASSED, merge complete
+
+### 验证最终配置
+
+```sh
+ruby -ryaml -e 'd=YAML.load_file(ARGV[0]);
+  puts "规则数  : #{(d["rules"]||[]).size}";
+  puts "策略组  : #{(d["proxy-groups"]||[]).size}";
+  puts "规则集  : #{(d["rule-providers"]||{}).size}";
+  puts "respect : #{(d["dns"]||{})["respect-rules"]}";
+  puts "listen  : #{(d["dns"]||{})["listen"]}";
+  puts "fallback: #{(d["dns"]||{})["fallback"].inspect}"' /etc/openclash/良心云.yaml
 ```
+
+预期：`51 / 22 / 43 / true / 0.0.0.0:7874 / nil`
+
+`fallback` 应为 `nil`（已删）。`rule-providers` 应为 43 + 1（OpenClash 的 `oc-cn-domain`）= 44。
+
+### 手动校验配置合法性
+
+```sh
+/etc/openclash/core/clash_meta -t -d /etc/openclash -f /etc/openclash/良心云.yaml
+```
+
+> `-d /etc/openclash` 不能省 —— 不带 home 目录找不到已下载的 geo 库，会误报失败。
 
 ---
 
 ## 八、出问题怎么恢复
 
-**最快的办法** —— LuCI 覆写设置页面顶部的官方恢复入口：
+**最快的办法** —— LuCI 覆写模块页面把本模块的「启用」关掉，重启 OpenClash。
+或在覆写设置页面顶部的官方恢复入口：
 
 ```
 http://<路由器IP>/cgi-bin/luci/admin/services/openclash/restore
 ```
 
-点一下回到原厂状态，脚本、DNS、fake-ip-filter 全清。
+后者会回到原厂状态，脚本、DNS、fake-ip-filter 全清。
 
-**或者**：把粘贴的内容删掉，恢复成原厂模板后重启 OpenClash。原厂模板在
-[OpenClash 仓库](https://github.com/vernesong/OpenClash/blob/master/luci-app-openclash/root/etc/openclash/custom/openclash_custom_overwrite.sh)。
-
-**如果只是分流不对**（网络还通）：改数据段里的 `rules:` 或 `proxy-groups:`，重新粘贴保存。
+**如果只是分流不对**（网络还通）：改 `[YAML]` 块里的 `rules!:` 或 `proxy-groups!:`，
+在模块编辑器里保存，重启。
 
 > **关键认知：mihomo 起不来 ≠ 路由器起不来。** LuCI、SSH、dnsmasq 都不依赖代理进程。
 > 最坏情况是「没有代理但局域网正常」，LuCI 用 `http://192.168.31.1` 照样进。
@@ -561,21 +602,21 @@ flclash 版把家宽/低倍率节点排除出所有地区组（见 `docs/design.
 | 增删策略组、改组名 | `rules/groups.yaml` | ✅ |
 | 增删地区、改地区正则 | `rules/regions.yaml` | ✅ |
 | 改通知/家宽/低倍率/流媒体关键词 | `rules/filters.yaml` | ✅ |
-| 改 DNS（DoH 源、policy、fake-ip-filter） | 数据段的 `dns:` | ✅ |
-| 改合并/校验逻辑 | 数据段之外的逻辑段 | ✅ |
+| 改 DNS（DoH 源、policy、fake-ip-filter） | `[YAML]` 块的 `dns:` | ✅ |
+| 改合并语义 | `[YAML]` 块里的键名后缀（`!` / `+` / `-`） | ✅ |
 
 **两类改动的区别很重要**：
 
 - 改 `rulesets/*.yaml` —— 只提交推送即可，内核按 `interval: 86400`（24 小时）自动拉取，
   **不用碰产物**。这是日常最常用的入口。
 - 改 `rules/*.yaml` —— 只是改了「事实来源」，**产物不会自动同步**。
-  必须重新渲染 `openclash-override-1002.sh` 再粘贴回 LuCI。
+  必须重新渲染 `openclash-override-1002.conf` 再上传回 LuCI。
 
 ---
 
 ## 十一、免责与来源
 
-本文件与 `openclash-override-1002.sh` 均为个人学习用途的脚本存档，
+本文件与 `openclash-override-1002.conf` 均为个人学习用途的脚本存档，
 由 AI 辅助生成后自行审阅调整，**未经完整的人工逐行审计**，可能存在逻辑缺陷与错误注释。
 
 配置会接管系统流量、修改 DNS，**配置错误可能导致部分流量不可用**。使用前请自行审阅全部代码。
