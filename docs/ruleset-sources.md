@@ -41,7 +41,7 @@
 | `Github` | yaml | classical | 438B | blackmatrix7/ios_rule_script | office | ✅ 200 |
 | `Origin` | yaml | classical | 1274B | blackmatrix7/ios_rule_script | game | ✅ 200 |
 | `CustomProxyRules` | yaml | classical | 6112B | toookamak/Net-routing（自建·本仓库） | office | ✅ 200 |
-| `CustomDirectRules` | yaml | classical | 4002B（本次新增 3 条 RayLink 规则，推送后会变大） | toookamak/Net-routing（自建·本仓库） | custom-direct | ✅ 200 |
+| `CustomDirectRules` | yaml | classical | 5426B | toookamak/Net-routing（自建·本仓库） | custom-direct | ✅ 200 |
 | `Reject_ip` | yaml | classical | 1167B | RealSeek/Clash_Rule_DIY | adblock | ✅ 200 |
 | `Reject_no_ip` | yaml | classical | 1068B | RealSeek/Clash_Rule_DIY | adblock | ✅ 200 |
 | `Reject_domainset` | yaml | domain | 840525B | RealSeek/Clash_Rule_DIY | adblock | ✅ 200 |
