@@ -10,42 +10,59 @@
 #      该地区名会从选项列表中移除，否则会引用到不存在的组（mihomo 报 loop）。
 #
 # 正则一律不区分大小写。加 g 标志会破坏 test() 的状态，不要加。
+#
+# ⚠️ 写过滤表达式的三条规矩（2026-10-02 用户定的方向，换订阅是常态）：
+#
+#   1. **只用简短文字，不要特殊符号。** 旗帜 emoji、全角冒号、连字符、方括号一律不用。
+#      代理商的命名风格不统一，但「香港 / Hong Kong」这种词是各家都认的；
+#      emoji 只有那一家在用，`: ` 只有那一家在用。符号越多，能匹配的代理商越少。
+#   2. **不要裸的两字母国家码。** `US` 大小写不敏感子串匹配，会把 `Australia`
+#      （A-**us**-tralia）整个吃进美国组 —— 这是静默错分，比漏匹配难查得多。
+#      要收英文节点就用完整词 `United States`。`HK`/`JP`/`SG`/`UK` 目前没观察到误伤，
+#      保留是为了兼容 `HK 01` / `JP 专线` 这类纯缩写命名。
+#   3. **地区组一律不写 exclude-filter**（原因见文件末尾）。
 
 - code: HK
   name: "🇭🇰 香港"
   icon: Hong_Kong.png
-  filter: "香港|HK|Hong Kong|🇭🇰"
+  filter: "香港|Hong Kong|HK"
 
 - code: SG
   name: "🇸🇬 新加坡"
   icon: Singapore.png
-  filter: "新加坡|狮城|SG|Singapore|🇸🇬"
+  filter: "新加坡|狮城|Singapore|SG"
 
 - code: JP
   name: "🇯🇵 日本"
   icon: Japan.png
-  filter: "日本|JP|Japan|🇯🇵"
+  filter: "日本|Japan|JP"
 
 - code: US
   name: "🇺🇸 美国"
   icon: United_States.png
-  filter: "美国|US|USA|United States|America|🇺🇸"
+  filter: "美国|United States|America"
+  note: |
+    2026-10-02 移除裸 `US` 与 🇺🇸。
+    `US` 大小写不敏感时是子串匹配，`Australia` 里就含 us，澳洲节点会被错分进美国组。
+    现在只认三个完整词。`US 洛杉矶 01` 这种纯缩写命名会落到「🌐 其他地区」，
+    属于可见可改的漏匹配，优于看不见的错分。
 
 - code: UK
   name: "🇬🇧 英国"
   icon: United_Kingdom.png
-  filter: "英国|UK|United Kingdom|伦敦|🇬🇧"
+  filter: "英国|伦敦|United Kingdom|UK"
   note: 2026-10-02 实测补入：某订阅 4 个英国节点全部命中，零误伤
 
 - code: TW
   name: "🇹🇼 台湾"
   icon: Taiwan.png
-  filter: "台湾|台灣|Taiwan|🇹🇼"
+  filter: "台湾|台灣|Taiwan"
   note: |
     2026-10-02 实测补入。
     ⚠️ 不用单字「台」—— 会误伤大量非台湾节点。
     ⚠️ 部分机场（含实测那家）用 🇨🇳 而非 🇹🇼 标注台湾，
-       所以台湾的正则靠「台湾」这个双字命中，国旗只是附加项。
+       所以台湾的正则靠「台湾」这个双字命中，旗帜只是附加项。
+    现在旗帜已从正则里去掉，靠中文双字本身命中，不受机场用哪个旗帜影响。
 
 # 常见可选补充（需要时取消注释）
 # - code: KR

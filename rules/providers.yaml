@@ -321,7 +321,11 @@
   applications:
     url: "https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/applications.txt"
     path: "./ruleset/toookamak/applications.list"
-    format: "text"
+    # ⚠️ 必须是 yaml —— URL 后缀是 .txt，但内容是 YAML（首行 payload:，条目为 "- TYPE,PAYLOAD"）。
+    # 声明成 text 时 mihomo 按纯文本逐行插入：首行 payload: 触发 missing subsequent parameters，
+    # 其余每行类型名变成 "- PROCESS-NAME" 触发 unsupported rule type，99 条规则一条都进不去。
+    # （path 保持 .list：缓存的是原始内容，与 format 无关，不值得为此重新下载）
+    format: "yaml"
     behavior: "classical"
     interval: 86400
 

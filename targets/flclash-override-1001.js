@@ -5,13 +5,20 @@
 // 形态：mihomo 覆写脚本，标准入口为 `function main(params) { ...; return params }`。
 // 依赖：mihomo >= v1.19.25（FlClash >= 0.8.93 打包该内核）—— Tailscale 出站的硬性要求。
 //
-// 版本：v1.0.2
+// 版本：v1.1.0
 //   · 2026-10-01：新增 Twitter/X 规则并纳入办公通讯
 //   · 2026-10-02：overwriteDns 默认源由国际 DoH 改为国内 DoH 单源
 //     （国际 DoH 大陆直连必超时，而本内核无法把 DNS 查询送进代理，详见 overwriteDns 注释）
 //   · 2026-10-02：Reject_domainset / CDN_domainset / Download_domainset 由 classical
-//     改为 domain —— 上游是 "+.域名" 简写格式，声明成 classical 会被内核整份丢弃，
-//     约 11.2 万条规则（含 10.8 万条广告域名）一直是空载
+//     改为 domain —— 上游是 "+.域名" 简写格式，声明成 classical 时每行都触发
+//     missing subsequent parameters 而被跳过，109004 行无一存活，等于空载；
+//     约 11.2 万条规则（含 10.8 万条广告域名）一直没生效
+//   · 2026-10-02：applications 的 format 由 text 改为 yaml —— Loyalsoldier 那个
+//     applications.txt 后缀是 .txt 但内容是 YAML，同样导致 99 条进程名规则全空载
+//   · 2026-10-02：过滤表达式全面去符号化，只留简短文字（换订阅是常态，
+//     符号只有那一家在用）。REGION_CONFIG 去掉旗帜 emoji，移除裸 US
+//     （/i 子串匹配会把 Australia 错分进美国组），并补齐 sources 里早就有、
+//     本产物却漏掉的 🇬🇧 英国 与 🇹🇼 台湾两个地区组。
 // 文件版本：1001（2026-10-01）
 //
 // ── 版本约定（重要）──────────────────────────────────────────────────────
@@ -120,16 +127,22 @@ const STRATEGY_NAMES = Object.freeze({
 
 /**
  * 节点特征关键词。改动请同步 rules/filters.yaml。
+ *
+ * ⚠️ 一律用简短文字，不要特殊符号（emoji / 冒号 / 连字符）。
+ *    换订阅是常态，各家命名风格不同，但「家宽」「剩余」这种词是通用的。
  */
 const FILTER_KEYWORDS = Object.freeze({
     // 通知节点关键词。
     // 宽版本含裸的「年」「月」等单字，会误杀正常线路节点（如「年付专线」）；
     // 收窄版本改用「年付/月付」等组合词，误杀更少。
-    NOTIFICATION: "自动|故障|流量|官网|套餐|机场|订阅|年|月|失联|频道|Traffic|Expire|剩余|激励|分享|到期|续费|充值",
-    NOTIFICATION_STRICT: "自动|故障|流量|官网|套餐|机场|订阅|年付|月付|失联|频道|Traffic|Expire|剩余|激励|分享|到期|续费|充值",
+    NOTIFICATION: "自动|故障|流量|官网|套餐|机场|订阅|年|月|失联|频道|Traffic|Expire|剩余|过期|激励|分享|到期|续费|充值",
+    NOTIFICATION_STRICT: "自动|故障|流量|官网|套餐|机场|订阅|年付|月付|失联|频道|Traffic|Expire|剩余|过期|激励|分享|到期|续费|充值",
 
-    RESIDENTIAL: "家宽|原生|residential|home",
-    LOW_RATE: "低倍率|lowrate|低-rate|倍率"
+    RESIDENTIAL: "家宽|原生|住宅|residential|home",
+    // ⚠️ 只覆盖中文/英文词形，不含「0.5x」这种数字倍率记法。
+    //    因为本键兼任「把命中节点排除出所有地区组」，并进数字倍率会让
+    //    美国 12→0、英国 4→0 整组消失。数字写法由 conf 的 [0-9]x 单独覆盖。
+    LOW_RATE: "低倍率|倍率|lowrate"
 });
 
 /**
@@ -157,26 +170,43 @@ const REGION_CONFIG = Object.freeze(new Map([
         code: "HK",
         name: "🇭🇰 香港",
         icon: "Hong_Kong.png",
-        regex: new RegExp("香港|HK|Hong Kong|🇭🇰", 'i')
+        regex: new RegExp("香港|Hong Kong|HK", 'i')
     }],
     ["SG", {
         code: "SG",
         name: "🇸🇬 新加坡",
         icon: "Singapore.png",
-        regex: new RegExp("新加坡|狮城|SG|Singapore|🇸🇬", 'i')
+        regex: new RegExp("新加坡|狮城|Singapore|SG", 'i')
     }],
     ["JP", {
         code: "JP",
         name: "🇯🇵 日本",
         icon: "Japan.png",
-        regex: new RegExp("日本|JP|Japan|🇯🇵", 'i')
+        regex: new RegExp("日本|Japan|JP", 'i')
     }],
     ["US", {
         code: "US",
         name: "🇺🇸 美国",
         icon: "United_States.png",
-        regex: new RegExp("美国|US|USA|United States|America|🇺🇸", 'i')
+        // ⚠️ 不要裸 US：/i 子串匹配会把 Australia（A-us-tralia）错分进美国组。
+        //    只认完整词。US 洛杉矶 01 这种纯缩写命名会落到「🌐 其他地区」，
+        //    那是看得见的漏匹配，比看不见的错分好。
+        regex: new RegExp("美国|United States|America", 'i')
     }],
+    ["UK", {
+        code: "UK",
+        name: "🇬🇧 英国",
+        icon: "United_Kingdom.png",
+        regex: new RegExp("英国|伦敦|United Kingdom|UK", 'i')
+    }],
+    ["TW", {
+        code: "TW",
+        name: "🇹🇼 台湾",
+        icon: "Taiwan.png",
+        // 不用单字「台」：会误伤大量非台湾节点。
+        // 也不依赖旗帜 —— 有的机场用 🇨🇳 标台湾，靠中文双字本身命中更稳。
+        regex: new RegExp("台湾|台灣|Taiwan", 'i')
+    }]
 ]));
 // @generated:end REGION_CONFIG
 
@@ -1634,7 +1664,10 @@ const RULE_PROVIDER_DEFINITIONS = {
     applications: {
         url: "https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/applications.txt",
         path: "./ruleset/toookamak/applications.list",
-        format: "text",
+        // ⚠️ 必须是 yaml —— URL 后缀是 .txt，但内容是 YAML（首行 payload:，条目 "- TYPE,PAYLOAD"）。
+        // 声明成 text 时按纯文本逐行插入：首行 payload: 触发 missing subsequent parameters，
+        // 其余每行类型名变成 "- PROCESS-NAME" 触发 unsupported rule type，99 条规则一条都进不去。
+        format: "yaml",
         behavior: "classical",
         interval: 86400
     },
