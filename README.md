@@ -61,7 +61,7 @@
 ```
 net-routing/
 ├── rules/                    ★ 规则定义（唯一事实来源）
-│   ├── providers.yaml          45 个规则集：URL / format / behavior / interval
+│   ├── providers.yaml          46 个规则集：URL / format / behavior / interval
 │   ├── priorities.yaml         规则顺序与目标组（顺序即优先级）
 │   ├── groups.yaml             策略组定义 + 命名规范
 │   ├── regions.yaml            地区匹配正则
@@ -84,7 +84,7 @@ net-routing/
     └── changelog.md            版本历史
 ```
 
-> 📖 想了解产物到底做了什么、53 条规则分别管什么、21 个策略组怎么用 —— 看
+> 📖 想了解产物到底做了什么、54 条规则分别管什么、21 个策略组怎么用 —— 看
 > [`targets/flclash-override-1001.md`](targets/flclash-override-1001.md)。
 >
 > 📌 **产物文件名带日期大版本**（`flclash-override-1001.js` = 2026-10-01 立项）。
@@ -154,7 +154,7 @@ payload:
 
 **客户端**：FlClash（Win / macOS / Linux / Android / iOS）。产物是标准 mihomo 覆写脚本。
 
-- 53 条分流规则，45 个规则集引用
+- 54 条分流规则，46 个规则集引用
 - 最多 21 个策略组（**实际数量随订阅节点动态变化**：地区组与特性组按订阅中实际出现的节点生成）
 - 地区组自动测速选最低延迟（选地区 ≠ 手动挑节点）
 - Tailscale 出站（替代独立客户端），分组开关控制启停
@@ -214,26 +214,31 @@ payload:
 
    **重新生成产物时要确认没有再引入第二处定义。**
 
+7. **FlClash 里订阅的覆写类型必须是「替换（Replace）」**
+   设成「合并（Merge）」时，订阅自带的 `dns` 与基础配置会**覆盖掉**产物写进去的值，
+   而 `rules` / `proxy-providers` 仍会生效 —— 症状是"规则全对，DNS 全错"，很难一眼看出。
+
+   2026-10-02 实际遇到：产物的 `overwriteDns` 明明写了
+   `nameserver: [dns.cloudflare.com, dns.google]` + `nameserver-policy: geosite:cn,private,apple → 国内 DoH`，
+   运行中的 `config.yaml` 却仍是订阅的
+   `nameserver: [doh.pub, alidns]` + `fallback: [tls://8.8.4.4, tls://1.1.1.1]`。
+   `find-process-mode` 同样对不上（产物 `strict`，运行 `off`）。
+
+   后果是境外域名在走直连出口时全部 `dns resolve failed: context deadline exceeded` ——
+   因为订阅那份 DNS 的 `fallback` 指向大陆不可直连的 DoT 源，且 `respect-rules: false`。
+
+   **换新订阅或重装客户端后，第一件事就是确认这一项。**
+
+   快速自检：对比运行中配置的 `nameserver` 是否为
+   `dns.cloudflare.com` / `dns.google`，且**没有** `fallback` 段。
+
 ---
 
 ## 已知问题
 
 以下问题在编写本 README 时经实际运行核对发现，**尚未修复**：
 
-### 1. 两组 provider 共用同一 `path`
-
-`Telegram_ip` / `Telegram_no_ip` 与 `GoogleFCM_ip` / `GoogleFCM_no_ip` 各自指向**完全相同**的 url 与 `path`。
-
-运行时 `flclash-override-1001.js` 会输出警告：
-
-```
-[net-routing Warn] 多个 provider 共用同一路径: ./ruleset/toookamak/Telegram.list -> Telegram_ip, Telegram_no_ip
-[net-routing Warn] 多个 provider 共用同一路径: ./ruleset/toookamak/GoogleFCM.list -> GoogleFCM_ip, GoogleFCM_no_ip
-```
-
-后果：两个 provider 竞争写入同一个缓存文件，更新时可能互相覆盖；同时这两对规则在功能上完全重复（两者都不带 `no-resolve`）。
-
-### 2. 家宽 / 低倍率节点不会进入地区组
+### 1. 家宽 / 低倍率节点不会进入地区组
 
 `classifyNodes` 中，命中「家宽」或「低倍率」特征的节点会被**排除在所有地区组之外**（`if (!isSpecial)`）。
 
@@ -241,9 +246,9 @@ payload:
 
 这是继承自原单文件脚本的既有行为，而非本次重构引入。
 
-### 3. 规则集命名容易误解
+### 2. 规则集命名容易误解
 
-provider 名中的 `_ip` / `_no_ip` 后缀表示的是**该规则集的内容类型**（含 IP 规则 / 纯域名规则），**不是** mihomo 的 `no-resolve` 参数。当前 53 条规则中只有 3 条真正带 `no-resolve`，且均为内联的 `IP-CIDR` / `GEOIP` 规则。
+provider 名中的 `_ip` / `_no_ip` 后缀表示的是**该规则集的内容类型**（含 IP 规则 / 纯域名规则），**不是** mihomo 的 `no-resolve` 参数。当前 54 条规则中只有 3 条真正带 `no-resolve`，且均为内联的 `IP-CIDR` / `GEOIP` 规则。
 
 ---
 

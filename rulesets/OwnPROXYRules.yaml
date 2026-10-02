@@ -55,6 +55,15 @@ payload:
   #    不会出现「页面能开但图裂在另一个出口」的错配。
   - DOMAIN-SUFFIX,ldstatic.com
 
+  # Stripe 支付域名。
+  #
+  # ⚠️ 上游 blackmatrix7 的 OpenAI 规则集里含 `DOMAIN-SUFFIX,stripe.com`，
+  #    而 OpenAI 规则集排在 ai 段 —— 支付流量会被带进「🤖 AI服务」，
+  #    和同一次支付会话里的 `*.stripe.network`（落到兜底代理）出口不一致。
+  #    支付类域名分属两个出口容易触发风控，这里统一收到「📁 办公通讯」。
+  - DOMAIN-SUFFIX,stripe.com
+  - DOMAIN-SUFFIX,stripe.network
+
 # ---------------------------------------------------------------------------
 # 填写说明
 # ---------------------------------------------------------------------------
