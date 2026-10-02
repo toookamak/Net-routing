@@ -5,10 +5,13 @@
 // 形态：mihomo 覆写脚本，标准入口为 `function main(params) { ...; return params }`。
 // 依赖：mihomo >= v1.19.25（FlClash >= 0.8.93 打包该内核）—— Tailscale 出站的硬性要求。
 //
-// 版本：v1.0.1
+// 版本：v1.0.2
 //   · 2026-10-01：新增 Twitter/X 规则并纳入办公通讯
 //   · 2026-10-02：overwriteDns 默认源由国际 DoH 改为国内 DoH 单源
 //     （国际 DoH 大陆直连必超时，而本内核无法把 DNS 查询送进代理，详见 overwriteDns 注释）
+//   · 2026-10-02：Reject_domainset / CDN_domainset / Download_domainset 由 classical
+//     改为 domain —— 上游是 "+.域名" 简写格式，声明成 classical 会被内核整份丢弃，
+//     约 11.2 万条规则（含 10.8 万条广告域名）一直是空载
 // 文件版本：1001（2026-10-01）
 //
 // ── 版本约定（重要）──────────────────────────────────────────────────────
@@ -1404,7 +1407,9 @@ const RULE_PROVIDER_DEFINITIONS = {
         url: "https://raw.githubusercontent.com/RealSeek/Clash_Rule_DIY/refs/heads/mihomo/REJECT/no_ip/Reject_domainset.yaml",
         path: "./ruleset/toookamak/Reject_domainset.yaml",
         format: "yaml",
-        behavior: "classical",
+        // ⚠️ 必须是 domain：上游是 "+.域名" 简写（0 条带逗号），
+        // classical 要求每行 "TYPE,PAYLOAD"，会把整份规则集丢弃。
+        behavior: "domain",
         interval: 172800
     },
     Reject_no_ip_drop: {
@@ -1593,7 +1598,8 @@ const RULE_PROVIDER_DEFINITIONS = {
         url: "https://raw.githubusercontent.com/RealSeek/Clash_Rule_DIY/refs/heads/mihomo/PROXY/no_ip/CDN_domainset.yaml",
         path: "./ruleset/toookamak/CDN_domainset.yaml",
         format: "yaml",
-        behavior: "classical",
+        // 同 Reject_domainset：上游是 "+.域名" 简写，必须 behavior: domain
+        behavior: "domain",
         interval: 172800
     },
     CDN_no_ip: {
@@ -1607,7 +1613,8 @@ const RULE_PROVIDER_DEFINITIONS = {
         url: "https://raw.githubusercontent.com/RealSeek/Clash_Rule_DIY/refs/heads/mihomo/PROXY/no_ip/Download_domainset.yaml",
         path: "./ruleset/toookamak/Download_domainset.yaml",
         format: "yaml",
-        behavior: "classical",
+        // 同 Reject_domainset：上游是 "+.域名" 简写，必须 behavior: domain
+        behavior: "domain",
         interval: 172800
     },
     Download_no_ip: {
