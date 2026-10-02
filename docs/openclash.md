@@ -43,20 +43,80 @@
 ## 一、覆写执行链
 
 ```
-/etc/init.d/openclash
-      ↓
-  yaml_overwrite.sh        ← OpenClash 自己的 YAML 处理（改端口、写 DNS、注入 oc-cn-domain…）
-      ↓
-  openclash_custom_overwrite.sh   ← 我们改这里，最后跑，所以我们的值最终生效
-      ↓
-  启动 mihomo
+/etc/init.d/openclash start_service()
+      │
+      ├─ overwrite_file()            读 INI 模块 → 生成 /tmp/yaml_overwrite.sh
+      ├─ get_config() / config_choose() / do_run_mode()
+      │
+      ├─ 第3步 按顺序修改 YAML
+      │    ├─ ① yml_change.sh          端口 / 模式 / TUN / DNS / Sniffer / 认证
+      │    ├─ ② yml_rules_change.sh    规则注入、自定义规则、provider CDN 重写
+      │    └─ ③ /tmp/yaml_overwrite.sh ← 由 INI 覆写模块编译而来
+      │
+      ├─ ④ /etc/openclash/custom/openclash_custom_overwrite.sh   ← 我们改这里，最后执行
+      │
+      └─ 启动 mihomo
 ```
 
 ✅ 「最后跑」这一点由原厂模板自述确认：
 `# Add your custom overwrite scripts here, they will be take effict after the OpenClash own srcipts`
 
-⚠️ 未验证：`yml_rules_change.sh`（自定义规则注入）在这条链上的确切位置。
-**规避办法：本项目不使用 OpenClash 的自定义规则机制**（见第三节「三选一」）。
+---
+
+## 一之二、⚠️ 两套覆写系统，别搞混
+
+OpenClash 同时存在两套完全不同的覆写机制，界面上挨得很近但行为差异很大。
+
+| | **覆写模块（上传）** | **自定义覆写脚本（可编辑区）** |
+|---|---|---|
+| 位置 | `/etc/openclash/overwrite/*.txt`、`.conf` | `/etc/openclash/custom/openclash_custom_overwrite.sh` |
+| 格式 | **INI 定义文件** | **shell + Ruby** |
+| 怎么生效 | OpenClash 遍历 UCI `config_overwrite` 条目，**编译生成** `/tmp/yaml_overwrite.sh` | 直接由 `/etc/init.d/openclash` 执行 |
+| 文件名要求 | 界面上传控件**只接受 `.txt` / `.conf`** | 固定名 `openclash_custom_overwrite.sh` |
+| 适合 | 改端口、改 DNS 开关这类标准项的声明式覆盖 | 任意 Ruby 改写（替换策略组、整段替换 rules、改 DNS 段） |
+
+**源码依据**（`luasrc/controller/openclash.lua` 的 `action_upload_overwrite`）：
+
+```lua
+local overwrite_dir = "/etc/openclash/overwrite/"
+local target_path = overwrite_dir .. filename
+...
+uci:add("openclash", "config_overwrite")
+uci:set("openclash", sid, "name", section_name)
+uci:set("openclash", sid, "type", "file")
+```
+
+> ❌ **不要把 shell 脚本用上传功能传上去。**
+> 它会被落到 `/etc/openclash/overwrite/`，注册成 INI 覆写模块，
+> 然后被当 INI 解析 —— 表现为「保存成功但什么都没发生」。
+> 上传时文件名后缀（txt/conf）就是线索：那是 INI 配置文件的习惯后缀。
+>
+> `action_overwrite_file_list` 会把两个目录的文件混在一个列表里展示，
+> 所以界面上看着像同一个功能，实际落点完全不同。
+
+**本项目只用第 ④ 步的自定义覆写脚本**，因为要替换 22 个策略组 + 51 条规则 + DNS 段，
+这些用 INI 模块表达不了。
+
+### 两种把脚本送进路由器的方式
+
+**方式一：LuCI 可编辑区粘贴**（推荐）
+覆写模块页面里编辑 `openclash_custom_overwrite.sh`，全选旧内容 → 粘贴新内容 → 保存。
+41KB 浏览器吃得下。保存后验证落点：
+
+```sh
+wc -c /etc/openclash/custom/openclash_custom_overwrite.sh   # 应约 41499
+head -3 /etc/openclash/custom/openclash_custom_overwrite.sh
+```
+
+**方式二：PowerShell 管道直写**（粘贴嫌长时用）
+
+```powershell
+ssh root@192.168.31.1 "cp /etc/openclash/custom/openclash_custom_overwrite.sh /etc/openclash/custom/openclash_custom_overwrite.sh.stock"
+Get-Content "F:\Git\Net-routing\targets\openclash-override-1002.sh" -Raw |
+  ssh root@192.168.31.1 "cat > /etc/openclash/custom/openclash_custom_overwrite.sh"
+```
+
+⚠️ PowerShell 不支持 `cmd < file` 语法，必须用 `Get-Content -Raw |`。
 
 ---
 
