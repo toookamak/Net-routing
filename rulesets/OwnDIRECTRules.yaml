@@ -22,7 +22,20 @@
 #    填规则时改成下面这样（注意缩进 2 空格，减号前有空格）：
 #      payload:
 #        - DOMAIN-SUFFIX,yoursite.com
-payload: []
+#
+# 飞牛 fnOS（NAS 系统）及其 FN Connect 远程访问服务
+#
+# 实测域名解析均为阿里云境内节点（106.15.42.56 / 47.101.149.170），
+# 且当前已由 GEOSITE,cn 覆盖、本来就走直连（实测 total 0.18~0.20s，
+# 与走代理无差异）。这里显式写一遍是**加固而非修复**：
+#   · 免得日后 geosite 数据变更导致它掉出 cn 组；
+#   · 明确「NAS 相关一律不消耗代理流量」这一意图。
+#
+# fnos.net  是 FN Connect 服务端（远程访问、DDNS、FN ID 登录）
+# fnnas.com 是官网与静态资源（static2.fnnas.com 承载前端 JS/CSS/图标）
+payload:
+  - DOMAIN-SUFFIX,fnos.net
+  - DOMAIN-SUFFIX,fnnas.com
 
   # ---------------------------------------------------------------------
   # ① 域名后缀：匹配 example.com 及其所有子域名
