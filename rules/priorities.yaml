@@ -28,12 +28,26 @@
     - CustomRejectRules
 
 - id: tailscale
-  comment: Tailscale 内网。必须早于 GEOSITE,cn 与 GEOIP,CN。
+  comment: >-
+    Tailscale 内网与服务端域名。必须早于 GEOSITE,cn 与 GEOIP,CN。
+    后两条是 tailscale.com / tailscale.io —— 协调 controlplane、登录 login、
+    DERP 中继 derpN、软件源 pkgs、遥测 log 都在其下。不直连时它们落兜底代理，
+    DERP 中继被选到境外，访问家里设备就得绕路。
+    ⚠️ 两端在此有意分叉：OpenClash 产物把整段硬写成 DIRECT（见
+    targets/openclash-override-1002.conf 段 3）；FlClash 产物仍按「🔗 Tailscale」
+    组走（该组默认 DIRECT）。改这里不会自动同步到两个产物。
+    ⚠️ 当前的实际差异：OpenClash 产物在段 3 另有第 9 条
+    PROCESS-NAME,tailscaled,DIRECT（进程规则只对路由器自身有效，FlClash 不需要，
+    因为客户端上进程规则命中的就是本机进程）；而下面 tailscale.com / tailscale.io
+    两条 OpenClash 产物已写，FlClash 产物（targets/flclash-override-1001.js 的
+    tailscale 段）**尚未同步，那里仍只有前 3 条**。
   group: "🔗 Tailscale"
   rules:
     - "IP-CIDR,100.64.0.0/10,no-resolve"
     - "IP-CIDR,100.100.100.100/32,no-resolve"
     - "DOMAIN-SUFFIX,ts.net"
+    - "DOMAIN-SUFFIX,tailscale.com"
+    - "DOMAIN-SUFFIX,tailscale.io"
 
 - id: direct
   comment: 私有网络 + 国内备案 CDN + 国内直连
