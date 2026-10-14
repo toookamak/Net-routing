@@ -1,0 +1,268 @@
+# lite 产物的裁剪白名单
+#
+# targets/flclash-override-lite-1014.js 是「全量骨架 + 本文件声明的裁剪」渲染出来的产物。
+# 渲染方式见 docs/design.md 第九节。
+#
+# 为什么用白名单、而不是直接手改产物：
+#   产物是渲染结果，手改会与 rules/ 漂移。仓库里已经有过先例 ——
+#   全量产物的 tailscale 段漏同步了两条域名，直到 2026-10-14 才被发现。
+#   白名单把「lite 与全量的差异」集中到一处，产物永远可以重放出来。
+#
+# 本文件只描述**差异**。规则内容、规则集 URL、地区正则、参数开关的事实来源仍是
+# rules/ 下的其它文件；改规则本体请改那边，本文件只在「lite 要不要保留」上表态。
+#
+# ⚠️ 段顺序即优先级（mihomo 命中即停），本文件的 sections 顺序不可调换。
+#    三条硬约束沿用 rules/priorities.yaml 头部：
+#      1. UnBan / Direct 必须排在所有 REJECT 之前
+#      2. Tailscale 必须排在 GEOSITE,cn 与 GEOIP,CN 之前
+#      3. GEOIP,CN 与 MATCH 必须留在最后两条
+
+version: lite-20261014
+
+derived_from:
+  product: targets/flclash-override-1001.js
+  content_version: v1.1.0
+  date: 2026-10-14
+
+target: targets/flclash-override-lite-1014.js
+
+# ===================== 分流规则段 =====================
+# 每段的字段与 rules/priorities.yaml 一致：id / group / rules。
+# rules 元素可以是规则集名，也可以是 {provider, group} 形式改投别的组。
+sections:
+  - id: unban
+    comment: 免拦截白名单 + 全球直连修正。必须最先。
+    group: DIRECT
+    rules:
+      - UnBan
+      - DirectNoResolve
+
+  - id: adblock
+    comment: 只保留主集与自托管集；domainset 大集与 drop 语义的集见 dropped_providers
+    group: "⛔ 广告拦截"
+    rules:
+      - Reject_no_ip
+      - CustomRejectRules
+
+  - id: tailscale
+    comment: >-
+      lite 不再建「🔗 Tailscale」组，也不注入 mihomo 的 tailscale 出站 ——
+      由系统自带的 Tailscale 客户端负责建连，clash 只保证这些流量不绕进代理。
+      整段硬写 DIRECT。后两条 PROCESS-NAME 是唯一能接住
+      「tailscaled 只带公网 IP、不带域名」流量（DERP / STUN）的手段；
+      进程规则依赖 basic options 里的 find-process-mode: strict。
+      Android 上拿不到其它应用的进程名，那两条在手机上不生效但无害。
+      tailscale.com / tailscale.io 故意不在此段：它们是登录页与管理后台，
+      且已在 rulesets/OwnDIRECTRules.yaml 里，经 CustomDirectRules 命中，功能等价。
+    group: DIRECT
+    rules:
+      - "IP-CIDR,100.64.0.0/10,no-resolve"
+      - "IP-CIDR,100.100.100.100/32,no-resolve"
+      - "DOMAIN-SUFFIX,ts.net"
+      - "PROCESS-NAME,tailscaled"
+      - "PROCESS-NAME,tailscaled.exe"
+
+  - id: direct
+    comment: 私有网络 + 国内备案 CDN + 国内直连（去掉 SteamCN_ip）
+    group: DIRECT
+    rules:
+      - "GEOSITE,private"
+      - "GEOIP,private,no-resolve"
+      - MicrosoftCNCDN_no_ip
+      - AppleCNCDN_no_ip
+      - "GEOSITE,cn"
+      - Lan_ip
+      - Domestic_no_ip
+
+  - id: custom-direct
+    comment: 用户自定义直连，锁死 DIRECT，不建组
+    rules:
+      - provider: CustomDirectRules
+        group: DIRECT
+
+  - id: custom-proxy
+    comment: 全量产物投「📁 办公通讯」，lite 无该组，直接投顶层「🧭 代理模式」
+    rules:
+      - provider: CustomProxyRules
+        group: "🧭 代理模式"
+
+  - id: ai
+    comment: 保留 AI 独立成组（用户明确要求）
+    group: "🤖 AI服务"
+    rules:
+      - OpenAI
+      - AI_no_ip
+      - Gemini
+
+  - id: geoip
+    comment: 国内 IP 兜底
+    group: "🛡️ 国内直连"
+    rules:
+      - "GEOIP,CN"
+
+  - id: final
+    comment: >-
+      兜底。全量产物指向「🌍 兜底代理」（默认跟随「🧭 代理模式」），
+      lite 删掉中间组，直接指向「🧭 代理模式」（默认「⚡ 延迟优选」）。
+    group: "🧭 代理模式"
+    rules:
+      - MATCH
+
+# ===================== 被整段删掉的规则段 =====================
+# 删除理由统一是「其目标组在 lite 中不存在」。
+# 注意：删段必须与删组成对进行，否则规则会指向不存在的组。
+dropped_sections:
+  - id: traffic
+    group: "📺 大流量通道"
+    reason: 目标组已删；applications 是进程级分流，按取舍不保留（桌面端会失去按进程分流）
+  - id: office
+    group: "📁 办公通讯"
+    reason: 目标组已删；这些流量落到 MATCH → 仍走代理，只失去「单独换出口」的可调性
+  - id: google
+    group: "🔍 谷歌服务"
+    reason: 目标组已删；同上
+  - id: cdn
+    group: "📺 大流量通道"
+    reason: 目标组已删；含 3 个 domainset 大集，是体积与更新流量的主要来源
+  - id: game
+    group: "游戏平台"
+    reason: 目标组已删；同上
+
+# ===================== 规则集 =====================
+providers:
+  # 13 本。顺序仅作阅读用，产物里的顺序以 sections 为准。
+  keep:
+    - UnBan
+    - DirectNoResolve
+    - Reject_no_ip
+    - CustomRejectRules
+    - MicrosoftCNCDN_no_ip
+    - AppleCNCDN_no_ip
+    - Lan_ip
+    - Domestic_no_ip
+    - CustomDirectRules
+    - CustomProxyRules
+    - OpenAI
+    - AI_no_ip
+    - Gemini
+
+  # 32 本 http 规则集，按原属段分组记录，便于将来按需加回。
+  drop:
+    adblock:
+      - Reject_domainset      # behavior: domain，约 10.8 万条广告域名 —— 单项最大收益
+      - Reject_no_ip_drop
+      - Reject_no_ip_no_drop
+      - Reject_ip
+    direct:
+      - SteamCN_ip
+    traffic:
+      - applications
+    office:
+      - Figma_ip
+      - Notion_ip
+      - Twitter
+      - Github
+      - OneDrive
+      - Dropbox
+      - Telegram_ip
+      - Telegram_no_ip
+      - Microsoft_no_ip
+      - Docker
+      - Npm
+    google:
+      - YouTube
+      - GoogleFCM_ip
+      - Google
+      - GoogleFCM_no_ip
+    cdn:
+      - MicrosoftCDN_no_ip
+      - CDN_domainset
+      - CDN_no_ip
+      - Download_domainset
+      - Download_no_ip
+      - GameDownload
+      - Stream_ip
+    game:
+      - UnrealRules
+      - Steam
+      - Origin
+      - Sony
+      - Nintendo
+
+  # 全量产物里的 providers.Npm 是内嵌（inline）规则集，lite 一并删除。
+  inline: []
+
+# ===================== 策略组 =====================
+# 键名对应产物里 STRATEGY_NAMES 的键。
+groups:
+  core:
+    - GLOBAL_ROUTING   # 🧭 代理模式
+    - AUTO_SELECT      # ⚡ 延迟优选
+    - FAILOVER         # 🚧 故障转移（保留：design.md 第五节记为功能取舍）
+    - ALL_NODES        # 🌍 全部节点
+  region: all          # 由 REGION_CONFIG 驱动，无成员的地区不建组
+  service:
+    - SERVICE_AI       # 🤖 AI服务
+    - SERVICE_ADBLOCK  # ⛔ 广告拦截
+  default_route:
+    - DOMESTIC_TRAFFIC # 🛡️ 国内直连
+  dropped:
+    - LINE_RESIDENTIAL # 🏠 家宽/原生线路
+    - LINE_LOWRATE     # 💰 低倍率节点
+    - LINE_NOTIFICATION # 📢 订阅信息
+    - SERVICE_OFFICE   # 📁 办公通讯
+    - SERVICE_GOOGLE   # 🔍 谷歌服务
+    - SERVICE_GAME     # 游戏平台
+    - SERVICE_TRAFFIC  # 📺 大流量通道
+    - TAILSCALE        # 🔗 Tailscale
+    - GLOBAL_TRAFFIC   # 🌍 兜底代理
+
+# ===================== 节点来源与分类 =====================
+node_sources:
+  # 这三项靠 classification 的布尔标志推入选项列表，与「组是否被创建」无关。
+  # 只删组不删这里，会让选项里出现不存在的组名 → mihomo 报 ProxyGroup loop。
+  drop:
+    - LINE_RESIDENTIAL
+    - LINE_LOWRATE
+    - LINE_NOTIFICATION
+
+  # 全量产物的「🧭 代理模式」选项含 REJECT，而兜底 MATCH 又跟随该组，
+  # 顶层误选 REJECT 会让全部兜底流量被拒（断网级）。lite 从该组移除。
+  drop_proxy_mode_option:
+    - REJECT
+
+  # 通知节点的判定必须保留：否则机场的「剩余流量 / 到期时间」节点会混进
+  # ⚡ 延迟优选 参与测速，污染延迟排序。只是不再为它们建「📢 订阅信息」组。
+  keep_notification_detection: true
+
+  # 🧭 代理模式 的选项末尾内联全部具体节点名，
+  # 从而可以直接把顶层指定为某一个节点，不必先进「🌍 全部节点」。
+  # mihomo 允许 select 的 proxies 混放策略组与具体节点。
+  inline_nodes: true
+
+  # 家宽 / 低倍率判定一并删除 → 这类节点回到所属地区组（修掉已知问题 2）。
+  drop_keywords:
+    - RESIDENTIAL
+    - LOW_RATE
+
+# ===================== 地区 =====================
+regions:
+  keep:
+    - HK
+    - JP
+    - US
+    - SG
+  other_name: "🌐 其他地区"
+  other_fallback: true  # 未命中上述四组、且不是通知节点的节点 → 🌐 其他地区（url-test）
+
+# ===================== 原样保留（不参与裁剪）=====================
+# 这些项与全量产物逐字一致，任何改动都必须两边同步。
+preserved:
+  - DNS：fake-ip（198.18.0.1/16）+ 国内 DoH（doh.pub / dns.alidns）+ fake-ip-filter 27 条（含 +.ts.net）
+  - TUN：stack mixed / mtu 1400 / dns-hijack any:53 / auto-route
+  - IPv6 三层封堵：ipv6:false + dns.ipv6:false + tun.inet6-route-address ["2000::/3"]
+  - sniffer：force-dns-mapping / parse-pure-ip / skip-domain +.push.apple.com
+  - basic options：find-process-mode strict（PROCESS-NAME 规则的前提）/ ipv6 false / profile.store-selected
+  - classifyNodes 里 `if (proxy.type === 'tailscale') return;`
+  - 段顺序硬约束与 no-resolve 位置语义（buildRule / parseRule）
+  - 「覆写 DNS」开关必须保持关闭（FlClash 客户端侧设置）

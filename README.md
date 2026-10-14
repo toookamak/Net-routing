@@ -67,7 +67,8 @@ net-routing/
 │   ├── regions.yaml            地区匹配正则
 │   ├── filters.yaml            节点特征关键词
 │   ├── options.yaml            运行时开关（ipv6 / tun / 测速 / tailscale）
-│   └── inline-rules.yaml       内嵌规则（不依赖外部 URL）
+│   ├── inline-rules.yaml       内嵌规则（不依赖外部 URL）
+│   └── profile-lite.yaml       lite 产物的裁剪白名单（保留哪些段 / 组 / 规则集）
 │
 ├── rulesets/                 ★ 日常改这里（客户端自动拉取，无需重新生成）
 │   ├── OwnDIRECTRules.yaml     → CustomDirectRules → DIRECT
@@ -75,8 +76,10 @@ net-routing/
 │   └── OwnREJECTRules.yaml     → CustomRejectRules → ⛔ 广告拦截
 │
 ├── targets/
-│   ├── flclash-override-1001.js  ★ 粘进 FlClash 的成品（自包含单文件）
-│   ├── flclash-override-1001.md  ★ 产物的功能与规则说明（改配置前先看这份）
+│   ├── flclash-override-1001.js  ★ 粘进 FlClash 的成品 · 全量版（自包含单文件）
+│   ├── flclash-override-1001.md  ★ 全量版的功能与规则说明（改配置前先看这份）
+│   ├── flclash-override-lite-1014.js ★ 粘进 FlClash 的成品 · lite 轻量版
+│   ├── flclash-override-lite-1014.md ★ lite 版的功能与规则说明
 │   ├── openclash-override-1002.sh  ★ 贴进 LuCI 覆写模块的自定义覆写脚本（单文件全包）
 │   ├── openclash-override-1002.md ★ 路由器侧产物的功能与规则说明
 │   └── openclash-routes.yaml     · 路由器产物的数据源（可 diff，.sh 由它拼装）
@@ -94,8 +97,12 @@ net-routing/
     └── changelog.md            版本历史
 ```
 
-> 📖 想了解产物到底做了什么、54 条规则分别管什么、21 个策略组怎么用 —— 看
+> 📖 想了解产物到底做了什么、54 条规则分别管什么、23 个策略组怎么用 —— 看
 > [`targets/flclash-override-1001.md`](targets/flclash-override-1001.md)。
+>
+> 📖 **FlClash 有两个产物**：全量版什么都能调；lite 版少而稳（23 条规则 / 13 个规则集 /
+> 12 个策略组），说明见 [`targets/flclash-override-lite-1014.md`](targets/flclash-override-lite-1014.md)。
+> 两者的差异集中在 [`rules/profile-lite.yaml`](rules/profile-lite.yaml)。
 >
 > 📌 **产物文件名带日期大版本**（`flclash-override-1001.js` = 2026-10-01 立项）。
 > 日常小改动直接改这个文件、文件名不变；只有**重大结构调整**才以当天日期另存为新大版本。详见
@@ -157,7 +164,7 @@ payload:
 
 | 依赖 | 版本 | 说明 |
 |---|---|---|
-| mihomo 内核 | ≥ v1.19.25 | Tailscale 出站的硬性要求。FlClash ≥ 0.8.93 打包该内核 |
+| mihomo 内核 | ≥ v1.19.25 | **仅全量产物**：Tailscale 出站的硬性要求（FlClash ≥ 0.8.93 打包该内核）。lite 不使用 tailscale 出站，无额外要求 |
 | Node.js | **不需要** | 项目没有构建脚本；`targets/flclash-override-1001.js` 在客户端内运行，无任何外部依赖 |
 
 ### 当前能力
@@ -174,13 +181,25 @@ LuCI 的「覆写模块」即可，两端共用 `rules/*.yaml` 这一层规则�
 > 📌 路由器侧产物目前只服务 **homelab 设备**（NAS / PVE / 服务器）；
 > 个人电脑与手机各自用 FlClash。
 
-### FlClash 侧能力
+### FlClash 侧能力（两个产物）
 
-- 54 条分流规则，46 个规则集引用
-- 最多 21 个策略组（**实际数量随订阅节点动态变化**：地区组与特性组按订阅中实际出现的节点生成）
+同一份 `rules/*.yaml` 事实来源渲染出两个产物，**互不影响，可同时存在**：
+
+| 能力 | `flclash-override-1001.js`（全量） | `flclash-override-lite-1014.js`（lite） |
+|---|---|---|
+| 分流规则 | 54 | **23** |
+| 规则集引用 | 46 | **13** |
+| 策略组上界 | 23 | **12** |
+| 地区组 | 港 / 新 / 日 / 美 / 英 / 台 | **港 / 新 / 日 / 美 + 🌐 其他地区** |
+| 「🧭 代理模式」直接指定单个节点 | ✗（需先进「🌍 全部节点」） | ✓（选项末尾内联全部节点） |
+| Tailscale | mihomo 内置出站替代独立客户端 | 不接管，规则硬直连 + 进程规则 |
+| 内核要求 | mihomo ≥ v1.19.25 | 无额外要求 |
+
+两者共有的能力：
+
+- 策略组数量**随订阅节点动态变化**（地区组按订阅中实际出现的地区生成，无成员的地区不建组）
 - 地区组自动测速选最低延迟（选地区 ≠ 手动挑节点）
-- Tailscale 出站（替代独立客户端），分组开关控制启停
-- IPv6 泄露封堵
+- IPv6 泄露封堵（三层）
 - 测速按需触发（`lazy`），降低移动端耗电
 
 ---
@@ -197,11 +216,12 @@ LuCI 的「覆写模块」即可，两端共用 `rules/*.yaml` 这一层规则�
 | 改通知/家宽/低倍率的关键词 | `rules/filters.yaml` | ✅ 需要 |
 | 改测速间隔、IPv6、TUN、mtu、Tailscale | `rules/options.yaml` | ✅ 需要 |
 | 改内嵌规则（npm 等） | `rules/inline-rules.yaml` | ✅ 需要 |
+| 调整 lite 的裁剪范围（保留哪些段 / 组 / 规则集） | `rules/profile-lite.yaml` | ✅ 需要（重新生成 **lite** 产物） |
 
 **两类改动的区别很重要**：
 
 - 改 `rulesets/*.yaml` —— 只提交推送即可，客户端按 `interval: 86400`（24 小时）自动拉取，**不用碰 `targets/flclash-override-1001.js`**。这是日常最常用的入口。
-- 改 `rules/*.yaml` —— 只是改了「事实来源」，**产物不会自动同步**。必须让 AI 依据 YAML 重新生成 `targets/flclash-override-1001.js`，再粘回 FlClash 才生效。
+- 改 `rules/*.yaml` —— 只是改了「事实来源」，**产物不会自动同步**。必须让 AI 依据 YAML 重新生成 `targets/flclash-override-1001.js`（若改的是 `rules/profile-lite.yaml`，则重新生成 `targets/flclash-override-lite-1014.js`），再粘回 FlClash 才生效。
 
 ---
 
@@ -290,9 +310,12 @@ LuCI 的「覆写模块」即可，两端共用 `rules/*.yaml` 这一层规则�
 
 这是继承自原单文件脚本的既有行为，而非本次重构引入。
 
+> ✅ **lite 产物不存在此问题**：`flclash-override-lite-1014.js` 取消了家宽 / 低倍率判定，
+> 这类节点与普通节点同等参与地区归属，会正常出现在对应地区组里。
+
 ### 3. 规则集命名容易误解
 
-provider 名中的 `_ip` / `_no_ip` 后缀表示的是**该规则集的内容类型**（含 IP 规则 / 纯域名规则），**不是** mihomo 的 `no-resolve` 参数。当前 54 条规则中只有 3 条真正带 `no-resolve`，且均为内联的 `IP-CIDR` / `GEOIP` 规则。
+provider 名中的 `_ip` / `_no_ip` 后缀表示的是**该规则集的内容类型**（含 IP 规则 / 纯域名规则），**不是** mihomo 的 `no-resolve` 参数。当前 54 条规则中只有 3 条真正带 `no-resolve`，且均为内联的 `IP-CIDR` / `GEOIP` 规则（lite 版 23 条规则中同样是这 3 条：两条 Tailscale 的 `IP-CIDR` 与 `GEOIP,private`）。
 
 ---
 
