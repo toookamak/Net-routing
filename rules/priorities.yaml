@@ -44,6 +44,11 @@
     rulesets/OwnDIRECTRules.yaml —— 两个产物都经 CustomDirectRules（OpenClash
     第 21 条、FlClash 第 21 条）命中，位置在各自「国内直连」段之后；因为那一段
     的目标本来就全是 DIRECT，功能等价，不需要为顺序挪动。
+    ⚠️ conf 另有第 51 条（段 11）
+    AND,((NETWORK,udp),(SRC-IP-CIDR,192.168.31.7/32)),DIRECT —— 给 LAN 上那台常用
+    终端放行整机 UDP 打洞（目标 IP/端口都不固定，抓不全）。它按「来源 IP」而不是
+    进程匹配，且规则集 payload 只支持单条规则、表达不了 AND 逻辑规则，所以同样
+    留在 conf 里，与上面的顺序无关。
   group: "🔗 Tailscale"
   rules:
     - "IP-CIDR,100.64.0.0/10,no-resolve"

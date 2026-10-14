@@ -79,6 +79,20 @@ payload:
   - DOMAIN-SUFFIX,tailscale.com
   - DOMAIN-SUFFIX,tailscale.io
 
+  # Tailscale 服务端的**静态段**（官方公布，只作兜底）
+  #
+  # 官方 firewall-ports 页写明：login / controlplane.tailscale.com 解析到
+  # 192.200.0.0/24（2025-07 起），log.tailscale.com 解析到 199.165.136.0/24
+  # （2025-11 起）；同页**明确建议按域名配置而不是硬编码 IP** —— 所以上面两条
+  # 域名才是主路径，这里只接住「没带着域名进来」的 IP 直连（SNI 嗅探没抓到，
+  # 或客户端自己拿到了 IP）。
+  # ⚠️ DERP 中继没有静态段（官方说明 IP 会变），那部分只能靠域名命中。
+  # ⚠️ 官方同页的 IPv6 对应段（2606:B740:49::/48、2606:B740:1::/48）未收录：
+  #    路由器侧 IPv6 根本不经过 mihomo（ipv6_enable=0 + dns.ipv6: false），
+  #    加了也是空转。
+  - IP-CIDR,192.200.0.0/24,no-resolve
+  - IP-CIDR,199.165.136.0/24,no-resolve
+
   # ---------------------------------------------------------------------
   # ① 域名后缀：匹配 example.com 及其所有子域名
   #    适合：整个站点（含所有子域）都该直连

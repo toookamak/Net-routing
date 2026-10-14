@@ -5,7 +5,7 @@
 > **自 v1.2.0 起它是单文件方案** —— 历史上曾拆成 `.conf` + `.sh` 两个文件，
 > 那条路已废弃，原因见第 〇之前 节。
 >
-> **文件大版本：1002（2026-10-02 立项）** ｜ **内容版本：v1.6.0** ｜ **规模：52 条分流规则 / 43 个规则集 / 22 个策略组**
+> **文件大版本：1002（2026-10-02 立项）** ｜ **内容版本：v1.7.0** ｜ **规模：53 条分流规则 / 43 个规则集 / 22 个策略组**
 
 ---
 
@@ -110,7 +110,7 @@ openclash-override-1002.conf
 | 换规则集源、改顺序、改参数、修 bug | **直接改 `openclash-override-1002.conf`，文件名不变** |
 | 重大结构调整（策略组结构重做、规则链整体重排） | 以**当天日期**另存为新大版本文件 |
 
-> 文件头部的 `内容版本：v1.6.0` 是**内容版本**（每次有实质改动就递增），
+> 文件头部的 `内容版本：v1.7.0` 是**内容版本**（每次有实质改动就递增），
 > 与文件名的大版本是两回事，不要混用。
 > **改动内容时必须同步递增它** —— 路由器上无法用 git 查部署的是哪一版，
 > 只能靠这个号人工比对（覆写模块编辑框第一屏可见，
@@ -202,7 +202,7 @@ targets/openclash-override-1002.conf  ← 本文件描述的对象（产物，�
 | 1 | 覆盖顶层键 | `mode` / `unified-delay` / `tcp-concurrent` / `geodata-mode` | 默认合并 |
 | 2 | **合并** | `dns` 段 | 保留 OpenClash 原有的 `listen` / `enhanced-mode` / `fake-ip-range`；`fake-ip-filter` 追加 |
 | 3 | **强制覆盖** | `proxy-groups` | 22 个自定义策略组 |
-| 4 | **合并 / 覆盖** | `rule-providers` / `rules` | 保留 OpenClash 注入的 `oc-cn-domain`；规则整条换成 52 条 |
+| 4 | **合并 / 覆盖** | `rule-providers` / `rules` | 保留 OpenClash 注入的 `oc-cn-domain`；规则整条换成 53 条 |
 
 另外在 `[General]` 段设置两个插件级开关：
 
@@ -281,8 +281,8 @@ targets/openclash-override-1002.conf  ← 本文件描述的对象（产物，�
 
 | 组名 | 类型 | 默认项 | 接入的规则 |
 |---|---|---|---|
-| 🛡️ 国内直连 | `select` | **DIRECT** | 第 51 条 `GEOIP,CN` |
-| 🌍 兜底代理 | `select` | 第一个 | 第 52 条 `MATCH` |
+| 🛡️ 国内直连 | `select` | **DIRECT** | 第 52 条 `GEOIP,CN` |
+| 🌍 兜底代理 | `select` | 第一个 | 第 53 条 `MATCH` |
 
 ### 关于空组
 
@@ -300,7 +300,7 @@ flclash 版有个「🌐 其他地区」组，兜住未命中任何地区的节�
 
 ---
 
-## 四、规则链全表（52 条）
+## 四、规则链全表（53 条）
 
 mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。下表是实际输出顺序。
 
@@ -327,7 +327,7 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 
 > 路由器版的广告拦截是 homelab 机器的**唯一防线** —— NAS / PVE / CI 上装不了 FlClash。
 
-### 第 3 段 · tailnet 内网与 Tailscale 进程（9–12）→ `DIRECT`
+### 第 3 段 · tailnet 内网 / Tailscale 域名与进程（9–12）→ `DIRECT`
 
 | # | 规则 | 作用 |
 |---|---|---|
@@ -444,14 +444,34 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 
 > homelab 场景下几乎用不到。流媒体解锁走「📺 流媒体节点」特性组，不走这里。
 
-### 第 11 段 · 兜底（51–52）
+### 第 11 段 · 单主机 UDP 直连例外（51）→ `DIRECT`
 
 | # | 规则 | 作用 |
 |---|---|---|
-| 51 | `GEOIP,CN,🛡️ 国内直连` | 国内 IP 兜底 |
-| 52 | `MATCH,🌍 兜底代理` | 其余全部走代理 |
+| 51 | `AND,((NETWORK,udp),(SRC-IP-CIDR,192.168.31.7/32)),DIRECT` | `192.168.31.7` 的全部 UDP 直连 |
 
-> **这两条必须是最后两条。** 脚本的自检会强制校验这一点，不符合就中止并回滚。
+> 只为 LAN 上那台常用终端（`192.168.31.7`）加的一段：它自己跑 tailscaled 时，UDP
+> 打洞的目标 IP 与端口都不固定（STUN 3478、WireGuard/DISCO），按域名和单端口都抓
+> 不全，所以整机 UDP 放行。
+> **为什么不能用进程规则**：LAN 客户端的进程在路由器上查不到（见 `[General]`
+> `FIND_PROCESS_MODE` 的说明），只能用来源 IP 近似；路由器自身的 UDP 仍由段 3 的
+> `PROCESS-NAME,tailscaled` 负责，不靠这条。
+> ⚠️ **代价**：该主机的**所有** UDP 都直连 —— QUIC/HTTP3、游戏、其他 UDP 全部绕开
+> 代理，这台机器不再有「防泄露」可言。要堵 QUIC 就在本条之前加
+> `AND,((NETWORK,udp),(SRC-IP-CIDR,192.168.31.7/32),(DST-PORT,443)),REJECT`
+> （QUIC 被拒后浏览器回落到 TCP 走代理）；不需要这条例外时整段删掉，其余规则不受影响。
+> ⚠️ **位置**：必须排在兜底之前（`GEOIP,CN` 与 `MATCH` 必须是最后两条）。对该主机
+> 发往国内 IP 的 UDP 也先命中这里，结果与 `GEOIP,CN` 一致。
+
+### 第 12 段 · 兜底（52–53）
+
+| # | 规则 | 作用 |
+|---|---|---|
+| 52 | `GEOIP,CN,🛡️ 国内直连` | 国内 IP 兜底 |
+| 53 | `MATCH,🌍 兜底代理` | 其余全部走代理 |
+
+> **这两条必须是最后两条。** 任何插到它们后面的规则都永远不会被匹配到
+> （单文件方案里没有自动自检脚本，改完请按第七节的命令核对顺序）。
 
 ### 带 `no-resolve` 的规则
 
@@ -689,7 +709,7 @@ ruby -ryaml -e 'd=YAML.load_file(ARGV[0]);
   puts "fallback: #{(d["dns"]||{})["fallback"].inspect}"' /etc/openclash/良心云.yaml
 ```
 
-预期：`52 / 22 / 43 / true / 0.0.0.0:7874 / nil`
+预期：`53 / 22 / 43 / true / 0.0.0.0:7874 / nil`
 
 `fallback` 应为 `nil`（已删）。`rule-providers` 应为 43 + 1（OpenClash 的 `oc-cn-domain`）= 44。
 
@@ -726,6 +746,23 @@ tailscale ping <对端主机名>     # 直连：pong ... via <IP>:41641；中继
 > `via DERP(...)`，就说明 TPROXY 下 UDP 的进程查找没命中。此时把 `[General]` 的
 > `FIND_PROCESS_MODE` 改回 `off` 并删掉第 9 条即可 —— 另外 3 条只管 TCP
 > （CGNAT 段 / MagicDNS 解析器 / `*.ts.net`，再加上规则集里那两条服务端域名），不受影响。
+
+**LAN 客户端那一侧（`192.168.31.7`）是另一条独立的规则**（第 11 段、第 51 条
+`AND,((NETWORK,udp),(SRC-IP-CIDR,192.168.31.7/32)),DIRECT`），它和第 9 条
+`PROCESS-NAME,tailscaled` 管的是两个不同的来源，别混：
+
+```sh
+# 规则有没有进产物（应能查到第 51 条这一条 AND，且它仍在 GEOIP,CN / MATCH 之前）
+ruby -ryaml -e 'd=YAML.load_file(ARGV[0]);
+  (d["rules"]||[]).each_with_index{|r,i| puts format("%2d  %s", i+1, r) if r.start_with?("AND,")}' /etc/openclash/良心云.yaml
+```
+
+然后到 `192.168.31.7` 那台机器上跑 `tailscale netcheck`（看 `UDP: true`）和
+`tailscale ping <对端>`（应 `via <IP>:41641`）；同时在路由器面板 → 连接里筛
+`192.168.31.7`，UDP 连接的「规则」列应显示 `AND`、「链路」列应是 `DIRECT`。
+
+> ⚠️ 这条**同样未实测**（`AND` 逻辑规则在 TPROXY 下对 UDP 是否生效，官方文档没有明说）。
+> 验不过就整段删掉：它只影响这一台机器的打洞，删掉不波及别的规则。
 
 ### 校验策略组有没有被正确筛（本次事故的直接验入口）
 
@@ -925,6 +962,7 @@ grep -n 'yaml_content=' /etc/init.d/openclash
 | 改合并语义 | `[YAML]` 块里的键名后缀（`!` / `+` / `-`） | ✅ |
 | 改 Tailscale 直连范围（域名） | `rulesets/OwnDIRECTRules.yaml` | **不用** —— 推送后 24h 内自动拉取，两个产物共用 |
 | 改 Tailscale 直连范围（进程 / 全局进程开关） | `.conf` 段 3 + `[General] FIND_PROCESS_MODE` | ✅ 手动上传 + 重启 |
+| 改单主机 UDP 直连例外（`192.168.31.7`） | `.conf` 段 11（单条 `AND,((NETWORK,udp),...)`） | ✅ 手动上传 + 重启 |
 | 改完记得 | **递增第 15 行 `内容版本`** | —— |
 
 **两类改动的区别很重要**：
