@@ -5,7 +5,7 @@
 > **自 v1.2.0 起它是单文件方案** —— 历史上曾拆成 `.conf` + `.sh` 两个文件，
 > 那条路已废弃，原因见第 〇之前 节。
 >
-> **文件大版本：1002（2026-10-02 立项）** ｜ **内容版本：v1.5.0** ｜ **规模：54 条分流规则 / 43 个规则集 / 22 个策略组**
+> **文件大版本：1002（2026-10-02 立项）** ｜ **内容版本：v1.6.0** ｜ **规模：52 条分流规则 / 43 个规则集 / 22 个策略组**
 
 ---
 
@@ -110,7 +110,7 @@ openclash-override-1002.conf
 | 换规则集源、改顺序、改参数、修 bug | **直接改 `openclash-override-1002.conf`，文件名不变** |
 | 重大结构调整（策略组结构重做、规则链整体重排） | 以**当天日期**另存为新大版本文件 |
 
-> 文件头部的 `内容版本：v1.5.0` 是**内容版本**（每次有实质改动就递增），
+> 文件头部的 `内容版本：v1.6.0` 是**内容版本**（每次有实质改动就递增），
 > 与文件名的大版本是两回事，不要混用。
 > **改动内容时必须同步递增它** —— 路由器上无法用 git 查部署的是哪一版，
 > 只能靠这个号人工比对（覆写模块编辑框第一屏可见，
@@ -202,7 +202,7 @@ targets/openclash-override-1002.conf  ← 本文件描述的对象（产物，�
 | 1 | 覆盖顶层键 | `mode` / `unified-delay` / `tcp-concurrent` / `geodata-mode` | 默认合并 |
 | 2 | **合并** | `dns` 段 | 保留 OpenClash 原有的 `listen` / `enhanced-mode` / `fake-ip-range`；`fake-ip-filter` 追加 |
 | 3 | **强制覆盖** | `proxy-groups` | 22 个自定义策略组 |
-| 4 | **合并 / 覆盖** | `rule-providers` / `rules` | 保留 OpenClash 注入的 `oc-cn-domain`；规则整条换成 54 条 |
+| 4 | **合并 / 覆盖** | `rule-providers` / `rules` | 保留 OpenClash 注入的 `oc-cn-domain`；规则整条换成 52 条 |
 
 另外在 `[General]` 段设置两个插件级开关：
 
@@ -281,8 +281,8 @@ targets/openclash-override-1002.conf  ← 本文件描述的对象（产物，�
 
 | 组名 | 类型 | 默认项 | 接入的规则 |
 |---|---|---|---|
-| 🛡️ 国内直连 | `select` | **DIRECT** | 第 53 条 `GEOIP,CN` |
-| 🌍 兜底代理 | `select` | 第一个 | 第 54 条 `MATCH` |
+| 🛡️ 国内直连 | `select` | **DIRECT** | 第 51 条 `GEOIP,CN` |
+| 🌍 兜底代理 | `select` | 第一个 | 第 52 条 `MATCH` |
 
 ### 关于空组
 
@@ -300,7 +300,7 @@ flclash 版有个「🌐 其他地区」组，兜住未命中任何地区的节�
 
 ---
 
-## 四、规则链全表（54 条）
+## 四、规则链全表（52 条）
 
 mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。下表是实际输出顺序。
 
@@ -327,7 +327,7 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 
 > 路由器版的广告拦截是 homelab 机器的**唯一防线** —— NAS / PVE / CI 上装不了 FlClash。
 
-### 第 3 段 · tailnet 内网 / Tailscale 服务 / 进程（9–14）→ `DIRECT`
+### 第 3 段 · tailnet 内网与 Tailscale 进程（9–12）→ `DIRECT`
 
 | # | 规则 | 作用 |
 |---|---|---|
@@ -335,8 +335,6 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 | 10 | `IP-CIDR,100.64.0.0/10,DIRECT,no-resolve` | Tailscale CGNAT 段 |
 | 11 | `IP-CIDR,100.100.100.100/32,DIRECT,no-resolve` | MagicDNS 解析器 |
 | 12 | `DOMAIN-SUFFIX,ts.net,DIRECT` | MagicDNS 域名 |
-| 13 | `DOMAIN-SUFFIX,tailscale.com,DIRECT` | 协调 / 登录 / DERP 中继 / 软件源 |
-| 14 | `DOMAIN-SUFFIX,tailscale.io,DIRECT` | 遥测 `log.tailscale.io` |
 
 > **必须早于 `GEOSITE,cn` 与 `GEOIP,CN`**，否则内网 IP 会被「国内直连」抢走。
 >
@@ -355,96 +353,103 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 > 与 `tailscale ping` 验证；不生效就把 `FIND_PROCESS_MODE` 改回 `off` 并删掉这一条，
 > 退回「只直连 TCP 协调/中继」的上一版行为。
 >
-> 第 13–14 条是 Tailscale 的**服务端域名**：协调 controlplane、登录 login、
-> DERP 中继 derpN、软件源 pkgs 都在 `tailscale.com` 下，遥测在 `tailscale.io`。
+> **Tailscale 的服务端域名不在这里**：`tailscale.com` / `tailscale.io` 写在
+> `rulesets/OwnDIRECTRules.yaml`（provider `CustomDirectRules`，本版落在第 21 条）。
+> 这样两个产物共用同一份名单，以后增删域名只需推送规则集，不用重新上传产物；
+> 而进程规则与 `FIND_PROCESS_MODE` 开关只能写在覆写文件里，所以这一块是
+> 「域名在规则集、进程与开关在覆写文件」。这两个域名覆盖 TCP 侧：协调 controlplane、
+> 登录 login、DERP 中继 derpN、软件源 pkgs 都在 `tailscale.com` 下，遥测在 `tailscale.io`。
 > 不写它们时这些连接落 `MATCH` → 🌍 兜底代理，中继被选到境外；直连后由 tailnet
 > 按真实网络自选最近的 relay。命中前提是「连接带着域名进来」（fake-ip 或嗅探
 > 还原 SNI，`ENABLE_META_SNIFFER_PURE_IP` 已开）；解析侧由 `nameserver-policy`
 > 把它们交给国际 DoH，不会拿到被污染的 IP。
+>
+> ⚠️ **顺序**：域名规则因此落在第 21 条，晚于第 17 条 `GEOSITE,cn`；两者目标都是
+> `DIRECT`（第 13–20 条全部直连），功能等价，不需要为顺序挪动。
 
-### 第 4 段 · 私有网络与国内直连（15–22）→ `DIRECT`
+### 第 4 段 · 私有网络与国内直连（13–20）→ `DIRECT`
 
 | # | 规则 | 作用 |
 |---|---|---|
-| 15 | `GEOSITE,private,DIRECT` | 私有域名 |
-| 16 | `GEOIP,private,DIRECT,no-resolve` | 私有 IP 段 |
-| 17 | `RULE-SET,MicrosoftCNCDN_no_ip,DIRECT` | 国内备案微软 CDN |
-| 18 | `RULE-SET,AppleCNCDN_no_ip,DIRECT` | 国内备案 Apple CDN |
-| 19 | `GEOSITE,cn,DIRECT` | **国内域名** |
-| 20 | `RULE-SET,Lan_ip,DIRECT` | 局域网 IP |
-| 21 | `RULE-SET,SteamCN_ip,DIRECT` | Steam 国内服务器 |
-| 22 | `RULE-SET,Domestic_no_ip,DIRECT` | 国内直连补充 |
+| 13 | `GEOSITE,private,DIRECT` | 私有域名 |
+| 14 | `GEOIP,private,DIRECT,no-resolve` | 私有 IP 段 |
+| 15 | `RULE-SET,MicrosoftCNCDN_no_ip,DIRECT` | 国内备案微软 CDN |
+| 16 | `RULE-SET,AppleCNCDN_no_ip,DIRECT` | 国内备案 Apple CDN |
+| 17 | `GEOSITE,cn,DIRECT` | **国内域名** |
+| 18 | `RULE-SET,Lan_ip,DIRECT` | 局域网 IP |
+| 19 | `RULE-SET,SteamCN_ip,DIRECT` | Steam 国内服务器 |
+| 20 | `RULE-SET,Domestic_no_ip,DIRECT` | 国内直连补充 |
 
-### 第 5 段 · 自定义直连（23）→ `DIRECT`（锁死，不建组）
+### 第 5 段 · 自定义直连（21）→ `DIRECT`（锁死，不建组）
 
 | # | 规则 |
 |---|---|
-| 23 | `RULE-SET,CustomDirectRules,DIRECT` ← 你的规则（`rulesets/OwnDIRECTRules.yaml`） |
+| 21 | `RULE-SET,CustomDirectRules,DIRECT` ← 你的规则（`rulesets/OwnDIRECTRules.yaml`） |
 
-### 第 6 段 · 办公通讯与开发工具链（24–34）→ `📁 办公通讯`
+### 第 6 段 · 办公通讯与开发工具链（22–32）→ `📁 办公通讯`
 
 | # | 规则 | 覆盖对象 |
 |---|---|---|
-| 24 | `RULE-SET,Github,📁 办公通讯` | GitHub |
-| 25 | `RULE-SET,Figma_ip,📁 办公通讯` | Figma |
-| 26 | `RULE-SET,Notion_ip,📁 办公通讯` | Notion |
-| 27 | `RULE-SET,Twitter,📁 办公通讯` | X / Twitter |
-| 28 | `RULE-SET,OneDrive,📁 办公通讯` | OneDrive |
-| 29 | `RULE-SET,Dropbox,📁 办公通讯` | Dropbox |
-| 30 | `RULE-SET,Telegram_ip,📁 办公通讯` | Telegram |
-| 31 | `RULE-SET,Microsoft_no_ip,📁 办公通讯` | 微软全线 |
-| 32 | `RULE-SET,Docker,📁 办公通讯` | Docker Hub（切 DIRECT 可让 `docker pull` 直连） |
-| 33 | `RULE-SET,Npm,📁 办公通讯` | npm / Node.js 包源（**内嵌规则**，无外部依赖） |
-| 34 | `RULE-SET,CustomProxyRules,📁 办公通讯` | 你的规则（`rulesets/OwnPROXYRules.yaml`） |
+| 22 | `RULE-SET,Github,📁 办公通讯` | GitHub |
+| 23 | `RULE-SET,Figma_ip,📁 办公通讯` | Figma |
+| 24 | `RULE-SET,Notion_ip,📁 办公通讯` | Notion |
+| 25 | `RULE-SET,Twitter,📁 办公通讯` | X / Twitter |
+| 26 | `RULE-SET,OneDrive,📁 办公通讯` | OneDrive |
+| 27 | `RULE-SET,Dropbox,📁 办公通讯` | Dropbox |
+| 28 | `RULE-SET,Telegram_ip,📁 办公通讯` | Telegram |
+| 29 | `RULE-SET,Microsoft_no_ip,📁 办公通讯` | 微软全线 |
+| 30 | `RULE-SET,Docker,📁 办公通讯` | Docker Hub（切 DIRECT 可让 `docker pull` 直连） |
+| 31 | `RULE-SET,Npm,📁 办公通讯` | npm / Node.js 包源（**内嵌规则**，无外部依赖） |
+| 32 | `RULE-SET,CustomProxyRules,📁 办公通讯` | 你的规则（`rulesets/OwnPROXYRules.yaml`） |
 
 > homelab 权重最高的一段：`git clone` / `docker pull` / `npm` / CI 都在这。
 
-### 第 7 段 · AI 服务（35–37）→ `🤖 AI服务`
+### 第 7 段 · AI 服务（33–35）→ `🤖 AI服务`
 
 | # | 规则 |
 |---|---|
-| 35 | `RULE-SET,OpenAI,🤖 AI服务` |
-| 36 | `RULE-SET,AI_no_ip,🤖 AI服务` |
-| 37 | `RULE-SET,Gemini,🤖 AI服务` |
+| 33 | `RULE-SET,OpenAI,🤖 AI服务` |
+| 34 | `RULE-SET,AI_no_ip,🤖 AI服务` |
+| 35 | `RULE-SET,Gemini,🤖 AI服务` |
 
-### 第 8 段 · 谷歌服务（38–40）→ `🔍 谷歌服务`
-
-| # | 规则 |
-|---|---|
-| 38 | `RULE-SET,Google,🔍 谷歌服务` |
-| 39 | `RULE-SET,YouTube,🔍 谷歌服务` |
-| 40 | `RULE-SET,GoogleFCM_ip,🔍 谷歌服务` |
-
-### 第 9 段 · 大流量通道（41–47）→ `📺 大流量通道`
+### 第 8 段 · 谷歌服务（36–38）→ `🔍 谷歌服务`
 
 | # | 规则 |
 |---|---|
-| 41 | `RULE-SET,MicrosoftCDN_no_ip,📺 大流量通道` |
-| 42 | `RULE-SET,CDN_domainset,📺 大流量通道` |
-| 43 | `RULE-SET,CDN_no_ip,📺 大流量通道` |
-| 44 | `RULE-SET,Download_domainset,📺 大流量通道` |
-| 45 | `RULE-SET,Download_no_ip,📺 大流量通道` |
-| 46 | `RULE-SET,GameDownload,📺 大流量通道` |
-| 47 | `RULE-SET,Stream_ip,📺 大流量通道` |
+| 36 | `RULE-SET,Google,🔍 谷歌服务` |
+| 37 | `RULE-SET,YouTube,🔍 谷歌服务` |
+| 38 | `RULE-SET,GoogleFCM_ip,🔍 谷歌服务` |
 
-### 第 10 段 · 游戏平台（48–52）→ `游戏平台`
+### 第 9 段 · 大流量通道（39–45）→ `📺 大流量通道`
 
 | # | 规则 |
 |---|---|
-| 48 | `RULE-SET,Steam,游戏平台` |
-| 49 | `RULE-SET,UnrealRules,游戏平台` |
-| 50 | `RULE-SET,Origin,游戏平台` |
-| 51 | `RULE-SET,Sony,游戏平台` |
-| 52 | `RULE-SET,Nintendo,游戏平台` |
+| 39 | `RULE-SET,MicrosoftCDN_no_ip,📺 大流量通道` |
+| 40 | `RULE-SET,CDN_domainset,📺 大流量通道` |
+| 41 | `RULE-SET,CDN_no_ip,📺 大流量通道` |
+| 42 | `RULE-SET,Download_domainset,📺 大流量通道` |
+| 43 | `RULE-SET,Download_no_ip,📺 大流量通道` |
+| 44 | `RULE-SET,GameDownload,📺 大流量通道` |
+| 45 | `RULE-SET,Stream_ip,📺 大流量通道` |
+
+### 第 10 段 · 游戏平台（46–50）→ `游戏平台`
+
+| # | 规则 |
+|---|---|
+| 46 | `RULE-SET,Steam,游戏平台` |
+| 47 | `RULE-SET,UnrealRules,游戏平台` |
+| 48 | `RULE-SET,Origin,游戏平台` |
+| 49 | `RULE-SET,Sony,游戏平台` |
+| 50 | `RULE-SET,Nintendo,游戏平台` |
 
 > homelab 场景下几乎用不到。流媒体解锁走「📺 流媒体节点」特性组，不走这里。
 
-### 第 11 段 · 兜底（53–54）
+### 第 11 段 · 兜底（51–52）
 
 | # | 规则 | 作用 |
 |---|---|---|
-| 53 | `GEOIP,CN,🛡️ 国内直连` | 国内 IP 兜底 |
-| 54 | `MATCH,🌍 兜底代理` | 其余全部走代理 |
+| 51 | `GEOIP,CN,🛡️ 国内直连` | 国内 IP 兜底 |
+| 52 | `MATCH,🌍 兜底代理` | 其余全部走代理 |
 
 > **这两条必须是最后两条。** 脚本的自检会强制校验这一点，不符合就中止并回滚。
 
@@ -455,7 +460,7 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 ```
 第 10 条  IP-CIDR,100.64.0.0/10,DIRECT,no-resolve
 第 11 条  IP-CIDR,100.100.100.100/32,DIRECT,no-resolve
-第 16 条  GEOIP,private,DIRECT,no-resolve
+第 14 条  GEOIP,private,DIRECT,no-resolve
 ```
 
 > ⚠️ provider 名里的 `_ip` / `_no_ip` 后缀表示**规则集的内容类型**（含 IP 规则 / 纯域名规则），
@@ -476,8 +481,9 @@ mihomo 规则**从上到下匹配，命中即停** —— 顺序即优先级。�
 > ➕ 反方向的差异：路由器版**多一条** FlClash 版没有的规则 —— 第 3 段第 9 条
 > `PROCESS-NAME,tailscaled,DIRECT`（原因见第 3 段）。FlClash 跑在客户端上，
 > 进程规则本来就能命中本机进程，不需要它；路由器上这条只为 tailscaled 的 UDP 服务。
-> 另外 `tailscale.com` / `tailscale.io` 两条服务端域名目前**只加在路由器版**，
-> FlClash 版第 3 段仍只有 3 条 —— 是否同步见 `rules/priorities.yaml` 该段注释。
+> 而 `tailscale.com` / `tailscale.io` 两条服务端域名**不在此列** —— 它们写在
+> `rulesets/OwnDIRECTRules.yaml`，两个产物都会经 `CustomDirectRules` 命中
+> （FlClash 版落在它自己的自定义直连段，效果相同）。
 
 ---
 
@@ -545,8 +551,8 @@ ruby -ryaml -e 'j=YAML.load(File.read("/tmp/p.json")); (j["providers"]||{}).each
 | 文件 | provider 名 | 生效位置 | 间隔 |
 |---|---|---|---|
 | `rulesets/OwnREJECTRules.yaml` | `CustomRejectRules` | 第 8 条（广告段末尾） | 24h |
-| `rulesets/OwnDIRECTRules.yaml` | `CustomDirectRules` | 第 23 条（锁死 DIRECT） | 24h |
-| `rulesets/OwnPROXYRules.yaml` | `CustomProxyRules` | 第 34 条（办公段末尾） | 24h |
+| `rulesets/OwnDIRECTRules.yaml` | `CustomDirectRules` | 第 21 条（锁死 DIRECT） | 24h |
+| `rulesets/OwnPROXYRules.yaml` | `CustomProxyRules` | 第 32 条（办公段末尾） | 24h |
 
 **这三个文件的地址只允许出现在规则层一处。** 产物里如果出现第二处硬编码定义，
 会在运行时把 YAML 生成的值整个覆盖掉，且 mihomo 静默空载不报错。
@@ -605,8 +611,8 @@ use-hosts        true
 > 所以中国大陆域名仍然走 fake-ip，不会因为加了这些而全部退回真实解析。
 
 > ⚠️ **别把 `tailscale.com` / `tailscale.io` 加进 `fake-ip-filter`。** 它们走 fake-ip
-> 才能让第 3 段的 `DOMAIN-SUFFIX` 规则命中（见第四节）；只有 `+.ts.net` 需要真实解析，
-> 因为 tailnet 地址（`100.64.0.0/10`）是给内核路由表用的，拿假 IP 会连不上。
+> 才能让规则集里那两条 `DOMAIN-SUFFIX` 命中（见第四节与第五节）；只有 `+.ts.net`
+> 需要真实解析，因为 tailnet 地址（`100.64.0.0/10`）是给内核路由表用的，拿假 IP 会连不上。
 
 ### 为什么本机能用国际 DoH 而 FlClash 不能
 
@@ -683,11 +689,11 @@ ruby -ryaml -e 'd=YAML.load_file(ARGV[0]);
   puts "fallback: #{(d["dns"]||{})["fallback"].inspect}"' /etc/openclash/良心云.yaml
 ```
 
-预期：`54 / 22 / 43 / true / 0.0.0.0:7874 / nil`
+预期：`52 / 22 / 43 / true / 0.0.0.0:7874 / nil`
 
 `fallback` 应为 `nil`（已删）。`rule-providers` 应为 43 + 1（OpenClash 的 `oc-cn-domain`）= 44。
 
-### 验证 Tailscale 这一段（第 3 段 6 条）
+### 验证 Tailscale 这一段（第 3 段 4 条 + 规则集 2 条）
 
 先看规则有没有按顺序进产物（前 15 条已覆盖第 1–3 段）：
 
@@ -696,7 +702,12 @@ ruby -ryaml -e 'd=YAML.load_file(ARGV[0]);
   (d["rules"]||[])[0,15].each_with_index{|r,i| puts format("%2d  %s", i+1, r)}' /etc/openclash/良心云.yaml
 ```
 
-预期第 9 条是 `PROCESS-NAME,tailscaled,DIRECT`，第 10–14 条是那 5 条 tailnet 地址与服务端域名。
+预期第 9 条是 `PROCESS-NAME,tailscaled,DIRECT`，第 10–12 条是 CGNAT 段、
+MagicDNS 解析器与 `*.ts.net`；第 21 条应是 `RULE-SET,CustomDirectRules,DIRECT`。
+
+> ⚠️ 两个服务端域名现在走规则集，所以除了规则顺序，还要确认那份规则集**真的拉到了**：
+> 用本节开头「改规则集源后先跑这条」的自检看 `CustomDirectRules` 的 `ruleCount`
+> 是否 > 0（0 = 静默空载），并 `grep -c tailscale` 该 provider 的落盘文件，应为 2。
 
 再确认**连接到底命中了哪条规则**（面板 → 连接，筛 `tailscaled`）：
 
@@ -713,8 +724,8 @@ tailscale ping <对端主机名>     # 直连：pong ... via <IP>:41641；中继
 
 > ⚠️ **这三条必须实测**：`netcheck` 里 `UDP: false`、或 `tailscale ping` 一直走
 > `via DERP(...)`，就说明 TPROXY 下 UDP 的进程查找没命中。此时把 `[General]` 的
-> `FIND_PROCESS_MODE` 改回 `off` 并删掉第 9 条即可 —— 另外 5 条只管 TCP
-> （协调 / 登录 / DERP / 软件源），不受影响。
+> `FIND_PROCESS_MODE` 改回 `off` 并删掉第 9 条即可 —— 另外 3 条只管 TCP
+> （CGNAT 段 / MagicDNS 解析器 / `*.ts.net`，再加上规则集里那两条服务端域名），不受影响。
 
 ### 校验策略组有没有被正确筛（本次事故的直接验入口）
 
@@ -884,6 +895,8 @@ grep -n 'yaml_content=' /etc/init.d/openclash
 
 第 3 段第 9 条 `PROCESS-NAME,tailscaled,DIRECT` 配 `FIND_PROCESS_MODE: strict`，
 目的是让 tailscaled 自己发出的 UDP（STUN 3478 / 打洞 41641）直连，恢复 P2P 打洞。
+（服务端域名 `tailscale.com` / `tailscale.io` 已移入 `rulesets/OwnDIRECTRules.yaml`，
+只覆盖 TCP 侧，与本条的 UDP 判定互不影响。）
 **尚未在路由器上验证**：OpenClash 混合模式靠 iptables `TPROXY` 接管 UDP，
 透明代理下连接不由本机进程持有，netfilter 侧能否给出 tailscaled 这个进程归属
 并不确定（官方对进程规则的说明是 "Only Works on Routerself"，指的是**路由器自身的
@@ -910,7 +923,8 @@ grep -n 'yaml_content=' /etc/init.d/openclash
 | 改通知/家宽/低倍率/流媒体关键词 | `rules/filters.yaml` | ✅ 同上 |
 | 改 DNS（DoH 源、policy、fake-ip-filter） | `[YAML]` 块的 `dns:` | ✅ |
 | 改合并语义 | `[YAML]` 块里的键名后缀（`!` / `+` / `-`） | ✅ |
-| 改 Tailscale 直连范围（域名 / 进程） | `.conf` 段 3 + `[General] FIND_PROCESS_MODE`（`rules/priorities.yaml` 只记顺序，注释见该段） | ✅ 手动上传 + 重启 |
+| 改 Tailscale 直连范围（域名） | `rulesets/OwnDIRECTRules.yaml` | **不用** —— 推送后 24h 内自动拉取，两个产物共用 |
+| 改 Tailscale 直连范围（进程 / 全局进程开关） | `.conf` 段 3 + `[General] FIND_PROCESS_MODE` | ✅ 手动上传 + 重启 |
 | 改完记得 | **递增第 15 行 `内容版本`** | —— |
 
 **两类改动的区别很重要**：

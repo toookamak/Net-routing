@@ -38,9 +38,12 @@
     组走（该组默认 DIRECT）。改这里不会自动同步到两个产物。
     ⚠️ 当前的实际差异：OpenClash 产物在段 3 另有第 9 条
     PROCESS-NAME,tailscaled,DIRECT（进程规则只对路由器自身有效，FlClash 不需要，
-    因为客户端上进程规则命中的就是本机进程）；而下面 tailscale.com / tailscale.io
-    两条 OpenClash 产物已写，FlClash 产物（targets/flclash-override-1001.js 的
-    tailscale 段）**尚未同步，那里仍只有前 3 条**。
+    因为客户端上进程规则命中的就是本机进程）。该条依赖覆写文件的
+    [General] FIND_PROCESS_MODE=strict，规则集表达不了，所以留在 conf 里。
+    ⚠️ 上面 tailscale.com / tailscale.io 两条域名**不再写进任何产物**，而是落在
+    rulesets/OwnDIRECTRules.yaml —— 两个产物都经 CustomDirectRules（OpenClash
+    第 21 条、FlClash 第 21 条）命中，位置在各自「国内直连」段之后；因为那一段
+    的目标本来就全是 DIRECT，功能等价，不需要为顺序挪动。
   group: "🔗 Tailscale"
   rules:
     - "IP-CIDR,100.64.0.0/10,no-resolve"

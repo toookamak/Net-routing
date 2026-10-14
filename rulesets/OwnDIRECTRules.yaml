@@ -60,6 +60,25 @@ payload:
   #   qq.com / qlogo.cn  微信登录的第三方，已被 GEOSITE,cn 覆盖
   #   www.qingjiaocloud.com  客户端内活动 banner 的落地页，不参与远控链路
 
+  # Tailscale（自建 tailnet：家里的 NAS / PVE / 路由器自身互联）
+  #
+  # 目的：用 tailscale 访问家里设备（fnOS / nas6418 / pve）时不要绕道国外。
+  # tailscaled 在路由器上是系统服务，它的**服务端域名**此前没有任何规则命中，
+  # 会落到 MATCH → 🌍 兜底代理，于是协调 controlplane、登录 login、DERP 中继
+  # derpN、软件源 pkgs 全被选到香港 / 东京 —— 这正是「绕路国外」的来源。
+  #   · tailscale.com：controlplane（协调） / login / api / derpN（中继） / pkgs
+  #   · tailscale.io ：log（遥测）
+  #
+  # ⚠️ 这里只能覆盖 TCP 侧（协调 / 登录 / 中继）。UDP（STUN 3478、打洞 41641）
+  #    发往任意对端 IP，无法按域名匹配，仍可能被兜底代理接走；路由器自身
+  #    tailscaled 的 UDP 直连由 OpenClash 覆写文件的段 3（PROCESS-NAME,tailscaled）
+  #    负责 —— 那一条依赖 [General] 的 FIND_PROCESS_MODE=strict，规则集表达不了，
+  #    所以两边各放一半：域名在本文件，进程与开关在覆写文件。
+  # ⚠️ 不要把 tailscale.com / tailscale.io 加进 OpenClash 的 fake-ip-filter：保留
+  #    fake-ip 才能让域名进到 mihomo，本文件的 DOMAIN-SUFFIX 才命中得上。
+  - DOMAIN-SUFFIX,tailscale.com
+  - DOMAIN-SUFFIX,tailscale.io
+
   # ---------------------------------------------------------------------
   # ① 域名后缀：匹配 example.com 及其所有子域名
   #    适合：整个站点（含所有子域）都该直连
