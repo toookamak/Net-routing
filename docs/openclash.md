@@ -251,7 +251,7 @@ LuCI 页面：服务 → OpenClash → 覆写设置
 | `dns.listen` | 必须是 `0.0.0.0:7874`；dnsmasq 已配好转发到它。**写错 = 全局域网 DNS 瘫痪** |
 | `authentication` | 面板密钥，由 OpenClash 管理 |
 | `rule-providers` 里的 `oc-cn-domain` | OpenClash 注入的大陆域名集（556KB mrs），与大陆绕过联动 |
-| `openclash_custom_firewall_rules.sh` | 防火墙层，出错直接断网 |
+| `openclash_custom_firewall_rules.sh` | 防火墙层，出错直接断网（Tailscale UDP 例外是唯一有条件的例外，见 [`../targets/openclash-override-1002.md`](../targets/openclash-override-1002.md)「已知问题 10」） |
 | `enable_custom_clash_rules` | 见上「三选一」 |
 
 ---
@@ -321,6 +321,10 @@ tailscaled: running，tailnet 10 台设备
 flclash 里的 `IP-CIDR,100.64.0.0/10,no-resolve` 是刚需（本机 tailnet 有 NAS 在跑大流量）。
 订阅自己的规则第 510 条也有 `IP-CIDR,100.64.0.0/10,DIRECT`。
 
+UDP 侧另说：tailscaled 的 STUN / 打洞流量目标与端口都不固定，域名与 IP 规则都抓不住。
+现方案是在防火墙层于 `TPROXY` **之前** `RETURN`（脚本与四步排查见覆写文件文档「已知问题 10」）；
+曾有过的 `PROCESS-NAME,tailscaled` 方案已在产物 v1.8.0 / v1.1.0 移除。
+
 ### 6. 大陆绕过不走 rules，在 ipset/防火墙层
 
 ```
@@ -335,6 +339,11 @@ flclash 里的 `IP-CIDR,100.64.0.0/10,no-resolve` 是刚需（本机 tailnet 有
 官方源码描述：`find_process_mode` — *"Only Works on Routerself"*。
 透明代理下连接由客户端进程持有，mihomo 只能查本机进程。
 → `applications`（`PROCESS-NAME`）规则集在路由器上必须砍掉。
+
+⚠️ 反过来，「路由器自身」的进程规则在 TPROXY 下同样不可靠：UDP 进入 mangle 表的
+`openclash` 链时流量已被 mihomo 接管，链内规则只在**首次连接**时评估。
+所以 `PROCESS-NAME,tailscaled` 接不住 Tailscale 的 UDP 打洞，该方案已在产物
+v1.8.0（全量）/ v1.1.0（lite）移除，改走防火墙层 `RETURN`。
 
 ### 8. 节点分类可交给 mihomo 原生 filter（✅ 语法已实测通过）
 
@@ -567,7 +576,7 @@ PC 侧：rules/*.yaml ──(渲染)──▶ targets/openclash-override-1002.co
 |---|---|---|
 | Ruby 报错 / YAML 写坏 | mihomo 起不来，**无代理** | ✅ 可救：LuCI 和 SSH 走局域网，不依赖代理 |
 | `dns.listen` 写错 | 全局域网 DNS 瘫痪（**含 LuCI 域名访问**） | ✅ 可救：LuCI 用 IP 访问，dnsmasq 重启即可 |
-| 动 `openclash_custom_firewall_rules.sh` | 防火墙层面断网 | ⚠️ 高危，本项目不碰 |
+| 动 `openclash_custom_firewall_rules.sh` | 防火墙层面断网 | ⚠️ 高危，本项目默认不碰；唯一有条件的例外是 Tailscale UDP 例外（见覆写文件文档「已知问题 10」，**未实测**） |
 | 规则写错（分流去向不对） | 部分站点走错出口，不影响连通性 | ✅ 改配置重载 |
 
 **关键认知：mihomo 挂掉 ≠ 路由器挂掉。** LuCI、SSH、dnsmasq 都不依赖代理进程。

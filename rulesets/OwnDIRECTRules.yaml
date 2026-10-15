@@ -70,10 +70,12 @@ payload:
   #   · tailscale.io ：log（遥测）
   #
   # ⚠️ 这里只能覆盖 TCP 侧（协调 / 登录 / 中继）。UDP（STUN 3478、打洞 41641）
-  #    发往任意对端 IP，无法按域名匹配，仍可能被兜底代理接走；路由器自身
-  #    tailscaled 的 UDP 直连由 OpenClash 覆写文件的段 3（PROCESS-NAME,tailscaled）
-  #    负责 —— 那一条依赖 [General] 的 FIND_PROCESS_MODE=strict，规则集表达不了，
-  #    所以两边各放一半：域名在本文件，进程与开关在覆写文件。
+  #    发往任意对端 IP，无法按域名匹配，仍可能被兜底代理接走。路由器自身
+  #    tailscaled 的 UDP 打洞不在这里处理 —— OpenClash 覆写文件曾用
+  #    PROCESS-NAME,tailscaled（配 FIND_PROCESS_MODE=strict）接它，v1.8.0 已删，
+  #    改为在防火墙层 PREROUTING / OUTPUT 的 TPROXY 之前 RETURN，脚本见
+  #    targets/openclash-override-1002.md「已知问题 10」。FlClash 侧不受影响
+  #    （客户端上的进程规则命中的就是本机进程，本来就有效）。
   # ⚠️ 不要把 tailscale.com / tailscale.io 加进 OpenClash 的 fake-ip-filter：保留
   #    fake-ip 才能让域名进到 mihomo，本文件的 DOMAIN-SUFFIX 才命中得上。
   - DOMAIN-SUFFIX,tailscale.com

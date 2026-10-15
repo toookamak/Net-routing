@@ -210,7 +210,7 @@ Tailscale 出站不是机场节点，若参与分类会：
 | 删 `applications` / `SteamCN_ip` / 内嵌 `Npm` | 3 个规则集 | 桌面端失去按进程分流；Steam 国内服务器不再显式直连 |
 | 删家宽 / 低倍率判定与两组 | 2 个策略组 + 2 条正则 | 失去特性筛选入口；**换来家宽节点回到地区组**（即修掉第七节已知问题 2） |
 | 删「📢 订阅信息」组 | 1 个策略组 | 通知节点不再有落脚的组（只是被排除出所有组） |
-| 删 Tailscale 出站与「🔗 Tailscale」组 | 1 个策略组 + 1 个节点 + 内核版本要求 | 不再用 clash 代替 Tailscale 客户端；改为系统客户端 + 段 3 硬直连 + 两条 `PROCESS-NAME` |
+| 删 Tailscale 出站与「🔗 Tailscale」组 | 1 个策略组 + 1 个节点 + 内核版本要求 | 不再用 clash 代替 Tailscale 客户端；改为系统客户端 + 段 3 硬直连（域名/IP 规则 + 防火墙层放行 UDP） |
 | 删「🌍 兜底代理」组 | 1 个策略组 | 兜底不再有独立开关，`MATCH` 直接指向「🧭 代理模式」 |
 | 地区收窄为港 / 新 / 日 / 美 | 2 个地区组 | 英国、台湾等节点统一进「🌐 其他地区」（url-test），不再单独成组 |
 
@@ -335,13 +335,48 @@ targets/flclash-override-lite-1014.js
 （构造假订阅 → 执行 `main()` → 逐项断言组数 / 规则数 / 规则集数 / 组引用完整性 /
 `no-resolve` 位置 / IPv6 三层）。**这些校验都是一次性的，不会随改动自动重跑。**
 
+### 另一客户端的 lite 产物：同一套路复用到 OpenClash
+
+2026-10-15 把这条路径复用到路由器侧：`targets/openclash-override-lite-1015.conf`。
+同样是「全量骨架 + 一份裁剪白名单」，只是换成 OpenClash 的覆写模块格式：
+
+```
+targets/openclash-override-1002.conf（全量骨架）
+        │  按 rules/profile-lite-openclash.yaml 声明的白名单重建三个段
+        │  （rules! / rule-providers / proxy-groups!），其余逐字保留
+        ▼
+targets/openclash-override-lite-1015.conf
+```
+
+| 维度 | 全量 | lite |
+|---|---|---|
+| 分流规则 | 52 | 22 |
+| 规则集 | 43 | 13 |
+| 策略组 | 22 | 11 |
+| 重建的段 | 全部 | 3 个（`[General]` 与 DNS 段逐字继承） |
+
+与 FlClash 侧的三个关键差异：
+
+1. **两个产物不能共存**：FlClash 的两个 `.js` 是两份独立配置、可同时导入；
+   OpenClash 对多个模块是**按启用顺序依次应用**：`rules!` / `proxy-groups!` 是强制覆盖
+   （后启用者赢），`rule-providers` 却是合并，所以同时启用的结果取决于列表顺序。
+2. **白名单多一节**：`rules/profile-lite-openclash.yaml` 除了裁剪范围，还有 `reference_fixups`
+   一节，逐条记录「删组之后哪些引用必须同步清理」—— 悬空引用在路由器上是**加载级失败**
+   （`ProxyGroup not found` / `ProxyGroup loop`），比客户端更硬。
+3. **裁剪范围刻意不同**：`filter` 只能单正则的限制让「🌐 其他地区」组做不出来，
+   路由器版本的段 3 只剩 3 条、没有任何进程规则（全量在 v1.8.0 也删掉了那条），
+   也没有应用级分流段。**两端不要「顺手统一」。**
+
+裁剪与继承列表仍集中在白名单一处，产物可重放。
+
 ### 目标客户端的实际状态
 
 | 客户端 | 场景 | 产物 |
 |---|---|---|
 | FlClash | Windows / Android | ✅ `targets/flclash-override-1001.js`（全量） |
 | FlClash | Windows / Android | ✅ `targets/flclash-override-lite-1014.js`（lite 轻量） |
-| OpenClash | 路由器（OpenWrt） | ✅ `targets/openclash-override-1002.sh` |
+| OpenClash | 路由器（OpenWrt） | ✅ `targets/openclash-override-1002.conf`（全量） |
+| OpenClash | 路由器（OpenWrt） | ✅ `targets/openclash-override-lite-1015.conf`（lite 轻量） |
 
 路由器版没有策略组分类代码：mihomo 原生支持 `include-all-proxies` + `filter` 正则，
 在运行时自己做节点分类。这是两端产物结构分叉的根因之一。

@@ -1,0 +1,353 @@
+# OpenClash lite 产物的裁剪白名单
+#
+# targets/openclash-override-lite-1015.conf 是「全量骨架 + 本文件声明的裁剪」
+# 渲染出来的产物。渲染方式见 docs/design.md 第九节。
+#
+# 与 rules/profile-lite.yaml（FlClash 侧白名单）的关系：
+#   两份白名单刻意**分开**，不做共用。原因是两端的段结构本身就不同 ——
+#     · OpenClash 没有独立的 cdn 段，cdn 的规则集并入了段 9 大流量通道；
+#     · OpenClash 多出段 11「单主机 UDP 直连例外」，FlClash 没有这个段；
+#     · OpenClash 段 3 只有 3 条（无 tailscaled.exe、v1.8.0 起也无进程规则），FlClash 是 5 条；
+#     · OpenClash 的组名是 YAML 字面量（`🧭 代理模式`），FlClash 侧白名单
+#       用的是 JS 里 STRATEGY_NAMES 的键名（GLOBAL_ROUTING）。
+#   硬复用会产生一对多的语义错配。保留两份平行文件的成本很低，
+#   且各自可读 —— 真要核对两端是否对齐，diff 本文件与 profile-lite.yaml
+#   的 dropped_* 清单即可。
+#
+# 本文件只描述**差异**。规则内容、规则集 URL、地区正则、参数开关的事实来源仍是
+# rules/ 下的其它文件与 targets/openclash-override-1002.conf；
+# 改规则本体请改那边，本文件只在「lite 要不要保留」上表态。
+#
+# ⚠️ 段顺序即优先级（mihomo 命中即停），本文件的 sections 顺序不可调换。
+#    三条硬约束沿用 targets/openclash-override-1002.conf 头部：
+#      1. UnBan / Direct 必须排在所有 REJECT 之前
+#      2. Tailscale 必须排在 GEOSITE,cn 与 GEOIP,CN 之前
+#      3. GEOIP,CN 与 MATCH 必须留在最后两条
+
+version: lite-oc-20261015
+
+derived_from:
+  product: targets/openclash-override-1002.conf
+  content_version: v1.8.0
+  date: 2026-10-15
+
+target: targets/openclash-override-lite-1015.conf
+
+# ===================== 分流规则段 =====================
+# 段号沿用全量产物的编号，便于与 openclash-override-1002.conf 对照。
+# ranges 的右端是全量产物里的规则序号，左端是 lite 产物里的规则序号。
+sections:
+  - id: unban
+    section: 1
+    comment: 免拦截白名单 + 全球直连修正。必须最先。
+    group: DIRECT
+    ranges: "1-2 → 1-2"
+    rules:
+      - UnBan
+      - DirectNoResolve
+
+  - id: adblock
+    section: 2
+    comment: >-
+      只保留主集与自托管集。domainset 大集与 drop 语义的三本集见
+      dropped_providers.adblock —— 它们的目标组虽然还在（⛔ 广告拦截），
+      但这三本与 Reject_domainset 属于同一批「可再挂回来」的集合，
+      lite 按 FlClash 侧同一取舍一并删除。
+    group: "⛔ 广告拦截"
+    ranges: "3-4（全量 3-8）"
+    rules:
+      - Reject_no_ip
+      - CustomRejectRules
+
+  - id: tailscale
+    section: 3
+    comment: >-
+      路由器侧的 tailnet 刚需。目标直接是 DIRECT，不建策略组
+      （tailscaled 是系统服务，tailnet 路由由它自己处理，mihomo 再插一层只会添乱）。
+      与 FlClash 侧的唯一差别：这里只有 3 条，没有 PROCESS-NAME,tailscaled.exe
+      （路由器是 OpenWrt / Linux，不存在 .exe）。
+      ⚠️ v1.8.0 删掉了原本的第 9 条（lite 第 5 条）
+      PROCESS-NAME,tailscaled,DIRECT —— 它想接住 tailscaled 自己发出的 UDP
+      打洞流量，但 TPROXY 接管之后链内规则（含进程规则）不可靠，改为在
+      防火墙层 PREROUTING / OUTPUT 的 TPROXY 之前 RETURN，脚本见
+      targets/openclash-override-1002.md 的「已知问题 10」。
+      因此 [General] FIND_PROCESS_MODE 回到 off，本段不再有不可裁项。
+    group: DIRECT
+    ranges: "5-7 → 全量 9-11"
+    rules:
+      - "IP-CIDR,100.64.0.0/10,no-resolve"
+      - "IP-CIDR,100.100.100.100/32,no-resolve"
+      - "DOMAIN-SUFFIX,ts.net"
+
+  - id: direct
+    section: 4
+    comment: 私有网络 + 国内备案 CDN + 国内直连（去掉 SteamCN_ip）
+    group: DIRECT
+    ranges: "8-14（全量 12-19）"
+    rules:
+      - "GEOSITE,private"
+      - "GEOIP,private,no-resolve"
+      - MicrosoftCNCDN_no_ip
+      - AppleCNCDN_no_ip
+      - "GEOSITE,cn"
+      - Lan_ip
+      - Domestic_no_ip
+
+  - id: custom-direct
+    section: 5
+    comment: 用户自定义直连，锁死 DIRECT，不建组
+    ranges: "15（全量 20）"
+    rules:
+      - provider: CustomDirectRules
+        group: DIRECT
+
+  - id: custom-proxy
+    section: 6
+    comment: >-
+      全量产物投「📁 办公通讯」（全量第 31 条，该段的最后一条），
+      lite 删掉了该组，直接投顶层「🧭 代理模式」（默认「⚡ 延迟优选」）。
+      本段在 lite 里只剩这一条 —— 其余 10 条办公通讯规则见 dropped_sections.office。
+    ranges: "16（全量 31）"
+    rules:
+      - provider: CustomProxyRules
+        group: "🧭 代理模式"
+
+  - id: ai
+    section: 7
+    comment: 保留 AI 独立成组（用户明确要求，两侧一致）
+    group: "🤖 AI服务"
+    ranges: "17-19 → 全量 32-34"
+    rules:
+      - OpenAI
+      - AI_no_ip
+      - Gemini
+
+  - id: udp-exception
+    section: 11
+    comment: >-
+      单主机 UDP 直连例外，OpenClash 独有的一段，FlClash 侧没有。
+      只为 192.168.31.7（LAN 上的常用终端）整机放行 UDP：它自己的 Tailscale
+      打洞（STUN 3478 / DISCO 发往对端公网 IP）目标与端口都不固定，
+      按域名和单端口都抓不全。路由器自身的 UDP 打洞已改为防火墙层前置
+      放行（见段 3 与配套文档「已知问题 10」），不再依赖进程规则。
+      lite 保留本段 —— 它与「少而稳」不冲突：只有一条，且删掉会退回
+      「访问家里设备绕路国外」的旧行为。不需要时整段删掉即可。
+    group: DIRECT
+    ranges: "20（全量 50）"
+    rules:
+      - "AND,((NETWORK,udp),(SRC-IP-CIDR,192.168.31.7/32))"
+
+  - id: geoip
+    section: 12a
+    comment: 国内 IP 兜底。必须是倒数第二条。
+    group: "🛡️ 国内直连"
+    ranges: "21（全量 51）"
+    rules:
+      - "GEOIP,CN"
+
+  - id: final
+    section: 12b
+    comment: >-
+      兜底。全量产物指向「🌍 兜底代理」（默认跟随「🧭 代理模式」），
+      lite 删掉中间组，直接指向「🧭 代理模式」（默认「⚡ 延迟优选」）。
+      理由与 FlClash 侧一致：多一层 select 只是多一个能点错的地方。
+      必须是最后一条。
+    group: "🧭 代理模式"
+    ranges: "22（全量 52）"
+    rules:
+      - MATCH
+
+# ===================== 被整段删掉的规则段 =====================
+# 删除理由统一是「其目标组在 lite 中不存在」。
+# 注意：删段必须与删组成对进行，否则规则会指向不存在的组。
+dropped_sections:
+  - id: google
+    section: 8
+    group: "🔍 谷歌服务"
+    reason: 目标组已删；这些流量落到 MATCH → 仍走代理，只失去「单独换出口」的可调性
+  - id: traffic
+    section: 9
+    group: "📺 大流量通道"
+    reason: >-
+      目标组已删；含 3 个 domainset 大集，是体积与更新流量的主要来源。
+      代价：下载 / CDN 流量回落到 MATCH 走代理，可能跑满代理带宽。
+  - id: game
+    section: 10
+    group: "游戏平台"
+    reason: >-
+      目标组已删；这些流量落到 MATCH → 仍走代理，只失去单独换出口的可调性。
+      另注：全量里「流媒体解锁走 📺 流媒体节点 特性组，不走这里」，
+      而 lite 连该特性组也一并删了 —— 见 dropped_groups。
+  - id: office
+    section: 6（部分）
+    group: "📁 办公通讯"
+    reason: >-
+      本段 11 条里删 10 条，只留 CustomProxyRules（改投 🧭 代理模式）。
+      该组默认首项就是「🧭 代理模式」，所以删掉**不改变当前行为**；
+      失去的是可调性：homelab 上最高频的动作「把 📁 办公通讯 切 DIRECT
+      让 docker pull / git clone 直连」不再可用。若日后需要，最省事的
+      加回办法是直接复用全量产物的本段并重建该组。
+
+# ===================== 规则集 =====================
+providers:
+  # 13 本。与 FlClash 侧的 keep 清单逐项相同 —— 这不是巧合：
+  # 全量里 OpenClash 本就比 FlClash 少的 3 本（applications /
+  # Telegram_no_ip / GoogleFCM_no_ip）恰好全在删除清单内，所以两端
+  # 各删掉自己的份额之后，剩下的 13 本完全一致。
+  keep:
+    - UnBan
+    - DirectNoResolve
+    - Reject_no_ip
+    - CustomRejectRules
+    - MicrosoftCNCDN_no_ip
+    - AppleCNCDN_no_ip
+    - Lan_ip
+    - Domestic_no_ip
+    - CustomDirectRules
+    - CustomProxyRules
+    - OpenAI
+    - AI_no_ip
+    - Gemini
+
+  # 30 本 http 规则集，按原属段分组记录，便于将来按需加回。
+  # 对应 profile-lite.yaml 的 32 本 —— 差的 2 本正是
+  # Telegram_no_ip 与 GoogleFCM_no_ip（applications 记在 traffic 组下，
+  # 也不在 OpenClash 全量里）。
+  drop:
+    adblock:
+      - Reject_domainset      # behavior: domain，约 10.9 万条广告域名 —— 单项最大收益
+      - Reject_no_ip_drop
+      - Reject_no_ip_no_drop
+      - Reject_ip
+    direct:
+      - SteamCN_ip
+    office:
+      - Figma_ip
+      - Notion_ip
+      - Twitter
+      - Github
+      - OneDrive
+      - Dropbox
+      - Telegram_ip
+      - Microsoft_no_ip
+      - Docker
+      - Npm
+    google:
+      - YouTube
+      - GoogleFCM_ip
+      - Google
+    cdn:
+      - MicrosoftCDN_no_ip
+      - CDN_domainset
+      - CDN_no_ip
+      - Download_domainset
+      - Download_no_ip
+      - GameDownload
+      - Stream_ip
+    game:
+      - UnrealRules
+      - Steam
+      - Origin
+      - Sony
+      - Nintendo
+
+  # 全量产物里的 providers.Npm 是内嵌（inline）规则集，lite 一并删除
+  # （与 profile-lite.yaml 的 inline: [] 一致）。
+  inline: []
+
+# ===================== 策略组 =====================
+# 这里写的是产物里的 YAML 字面量组名 —— OpenClash 侧没有 STRATEGY_NAMES 那层
+# 键名间接，写错一个字符 mihomo 就直接拒绝加载。
+groups:
+  core:
+    - "🧭 代理模式"
+    - "⚡ 延迟优选"
+    - "🚧 故障转移"     # 保留：docs/design.md 第五节记为功能取舍
+    - "🌍 全部节点"
+  region:
+    - "🇭🇰 香港"
+    - "🇸🇬 新加坡"
+    - "🇯🇵 日本"
+    - "🇺🇸 美国"
+  service:
+    - "🤖 AI服务"
+    - "⛔ 广告拦截"
+  default_route:
+    - "🛡️ 国内直连"
+  dropped:
+    - "🇬🇧 英国"          # 地区组收窄到四个（与 profile-lite.yaml 的 regions.keep 一致）
+    - "🇹🇼 台湾"
+    - "🏠 家宽/原生线路"
+    - "💰 低倍率节点"
+    - "📺 流媒体节点"
+    - "📢 订阅信息"
+    - "📁 办公通讯"
+    - "🔍 谷歌服务"
+    - "游戏平台"
+    - "📺 大流量通道"
+    - "🌍 兜底代理"
+
+# ===================== 引用同步（断网级，改产物时必须逐项核对）=====================
+# 删组不删引用 = mihomo 报 ProxyGroup not found = **整份配置拒绝加载**。
+# 在客户端上这是「配置导入失败」，在路由器上这是全家断网 —— 两者不是一个量级。
+reference_fixups:
+  - group: "🧭 代理模式"
+    full_line: 205-216
+    action: >-
+      proxies 列表里删除 🇬🇧 英国 / 🇹🇼 台湾 / REJECT 三项。
+      前三项的目标组已被删除；REJECT 的删除理由与 FlClash 侧一致：
+      兜底 MATCH 跟随本组，顶层误选 REJECT 会让全部兜底流量被拒（断网级）。
+      删后剩 8 项：⚡ 延迟优选 / 🇭🇰 香港 / 🇸🇬 新加坡 / 🇯🇵 日本 /
+      🇺🇸 美国 / 🚧 故障转移 / 🌍 全部节点 / DIRECT。
+
+  - group: "🛡️ 国内直连"
+    full_line: 385-395
+    action: >-
+      proxies 列表里删除 🇬🇧 英国 / 🇹🇼 台湾 两项。
+      本组首项是 DIRECT 且保持首项 —— 这是「国内直连」的默认语义。
+      删后剩 8 项：DIRECT / ⚡ 延迟优选 / 🇭🇰 香港 / 🇸🇬 新加坡 /
+      🇯🇵 日本 / 🇺🇸 美国 / 🚧 故障转移 / 🌍 全部节点。
+
+  - group: "🌍 兜底代理"
+    full_line: 397-412
+    action: >-
+      整组删除，组的全部定义（含 proxies 列表）一并删掉。
+      同时把 rules 最后一条从 MATCH,🌍 兜底代理 改成 MATCH,🧭 代理模式
+      （见 sections.final）。
+
+  - group: "🌍 全部节点"
+    full_line: 241-249
+    action: >-
+      **不改动**，但注释必须保留并改写：全量里那段说明「flclash 版有个
+      🌐 其他地区 组用来兜这些节点，路由器上做不出来（Go RE2 不支持否定前瞻）」。
+      lite 沿用同一取舍 —— 本组仍不设 filter，未命中四大地区的节点
+      （英国 / 台湾 / 韩国 / 德国…）在本组里可选，但 lite 删掉英/台地区组后
+      没有再给它们一个「自动挑延迟最低」的入口，这是本产物已知的能力缺口。
+
+  - group: "🤖 AI服务"
+    full_line: 356-358
+    action: >-
+      **不改动**。proxies 里的 REJECT 保留 —— 本组不接兜底流量，
+      误选 REJECT 只影响 AI 域名，不构成断网。
+
+  - group: "⛔ 广告拦截"
+    full_line: 373-376
+    action: >-
+      **不改动**。proxies 固定 ["REJECT", "DIRECT"]，不可选其他出口。
+      ⚠️ 但本组引用的 4 本规则集被删除，规则链上只剩 Reject_no_ip 与
+      CustomRejectRules 两条 —— 必须确认没有别处引用被删的 provider。
+
+# ===================== 原样保留（不参与裁剪）=====================
+# 这些项与全量产物逐字一致，任何改动都必须两边同步。
+# 路由器侧特有、且**不可裁**的项都记在这里，避免下一次裁剪时误伤。
+preserved:
+  - "[General] FIND_PROCESS_MODE = off（规则链里已无进程规则；手工加回任何 PROCESS-NAME 规则时必须同时改回 strict）"
+  - "[General] CORE_TYPE = Meta / RESTART = false / ENABLE_META_SNIFFER = 1 / ENABLE_META_SNIFFER_PURE_IP = 1"
+  - "[General] GITHUB_ADDRESS_MOD（provider URL 自动重写为 CDN，大陆拉规则集刚需）"
+  - "[General] CHNR / GEOIP / GEOSITE 的三组 AUTO_UPDATE 与更新时间（定时任务读 UCI，写在这里不一定生效）"
+  - "顶层键 mode: rule / unified-delay / tcp-concurrent / geodata-mode"
+  - "dns 段全部：respect-rules true / ipv6 false / 删 fallback / 国内 DoH / proxy-server-nameserver / geosite:gfw 走国际 DoH / fake-ip-filter 30 条"
+  - "[YAML] 块的全部合并算子语义（key! / key+ / key- / key*）与 rules! 整体替换"
+  - "filter / exclude-filter 的单引号单正则写法（OpenClash 0.47.156 的 eval 会吞掉含双引号的行）"
+  - "no-resolve 必须写在目标组之后（写在前面会报 proxy [no-resolve] not found）"
+  - "段 11 的 AND 规则与「GEOIP,CN 与 MATCH 必须是最后两条」的位置约束"

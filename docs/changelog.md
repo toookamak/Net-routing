@@ -289,3 +289,130 @@ Android 上拿不到其它应用的进程名，那两条在手机上不生效但
   （顺带订正策略组上界 21 → 23）；常用改动表补 `rules/profile-lite.yaml`；已知问题 2 标注 lite 已修
 - `docs/design.md` —— 第五节补「lite 产物的取舍」；第七节已知问题 2 标注 lite 已修；
   第九节补「同一客户端的第二个产物：白名单裁剪」与产物状态表
+
+---
+
+## OpenClash lite 轻量产物（2026-10-15）
+
+### 新增产物 `targets/openclash-override-lite-1015.conf`
+
+路由器侧的第二个产物：**22 条分流规则 / 13 个规则集 / 11 个策略组**（全量：52 / 43 / 22）。
+骨架取自 `openclash-override-1002.conf`（内容版本 v1.8.0），按新增的裁剪白名单渲染，
+产物内容版本 **v1.0.0**（同日因 Tailscale 回退升至 **v1.1.0**，见下一节）。
+
+**动机**：FlClash lite（2026-10-14）验证了「同骨架 + 裁剪白名单」这条路可行，
+路由器侧同样存在「规则太多、组太多、日常只用一个入口」的问题；
+且路由器是 7×24 常驻设备、内存比手机紧张，规则集削减的收益比客户端更大。
+与 FlClash lite 一样，裁剪重点放在**规则集**上（43 → 13）。
+
+**破坏性约束**：本模块与全量 `openclash-override-1002.conf` **不能同时启用** ——
+两者都有 `[YAML]` 块，OpenClash 对多个模块是依次合并而非后者覆盖，
+`rules!` / `proxy-groups!` 会按启用顺序互相覆盖。切换时必须先停用另一个。
+
+### 新增 `rules/profile-lite-openclash.yaml`（裁剪白名单）
+
+声明 OpenClash lite 与全量的全部差异：保留的规则段与目标组、删除的 30 本规则集、
+保留的 11 个策略组、地区白名单，以及**必须与全量逐字一致**的部分
+（`[General]`、DNS 段、fake-ip-filter）。另含 `reference_fixups` 一节，
+逐条记录「删掉某个组之后哪些引用必须同步清理」—— 路由器侧删组最容易出事的地方，
+悬空引用会直接导致整份配置 `ProxyGroup not found` 加载失败。
+
+### 相对全量的主要裁剪
+
+| 类别 | 省下 | 代价 |
+|---|---|---|
+| 广告拦截收窄（3 个 domainset + 2 个 drop 集 + `Reject_ip`） | 4 个规则集（含约 10.8 万条广告域名） | 漏拦变多（**lite 最实质的代价**） |
+| 服务组整段删除（办公通讯 / 谷歌服务 / 游戏平台 / 大流量通道） | 17 个规则集 + 4 个策略组 | 流量落到 `MATCH` 仍走代理，只失去可调性 |
+| 删 `SteamCN_ip` | 1 个规则集 | 国区 Steam 回落到走代理 |
+| 删 `applications` 与进程规则 | 2 个规则集 | 路由器侧本来就对 LAN 客户端无效 |
+| 删家宽 / 低倍率 / 流媒体 / 订阅信息 四组 | 4 个策略组 | 失去按线路特性筛节点的可调性 |
+| 删「🌍 兜底代理」组 | 1 个策略组 | `MATCH` 直接指向「🧭 代理模式」 |
+| 地区收窄为港 / 新 / 日 / 美 | 2 个地区组 | 英台节点只能走「🌍 全部节点」 |
+
+保留的关键决定：`🤖 AI服务` 与 `🛡️ 国内直连` 两个服务组、第 11 段单主机 UDP 直连例外、
+自托管 3 本规则集（`Own*.yaml`）、`FIND_PROCESS_MODE = off`（当晚由 `strict` 改回，见下一节）。
+
+### lite 特有的设计
+
+1. **从「🧭 代理模式」移除 `REJECT`** —— 与 FlClash lite 同样是断网级隐患的预防；
+   OpenClash 侧**同时删掉「🇬🇧 英国」「🇹🇼 台湾」两个选项**，否则目标组不存在会直接导致加载失败。
+2. **`rule-providers` 用默认合并而非 `!` 覆盖** —— 必须保留 OpenClash 注入的 `oc-cn-domain`
+   规则集（预期产物 13 + 1 = 14 本），用 `!` 会把它一并删掉。
+3. **`filter` 从 `'：'` 改为 `'剩余'`** —— 兼容「剩余流量 / 剩余天数 / 距离下次重置剩余」三种通知节点命名。
+4. ~~**`FIND_PROCESS_MODE` 由 `off` 改回 `strict`** —— 让第 5 条 `PROCESS-NAME,tailscaled`
+   兜住 tailscaled 自己发出的 UDP（STUN 3478 / 打洞 41641），它是「访问家里设备绕路国外」的主因。~~
+   **已于同日撤回**：TPROXY 接管后链内规则接不住这段 UDP，该条与 `strict` 一起移除，
+   改在防火墙层 `RETURN`（见下一节）。
+
+### 两处刻意的跨端差异（不要统一）
+
+| 维度 | FlClash lite | OpenClash lite | 原因 |
+|---|---|---|---|
+| 「🌐 其他地区」组 | 有 | **没有** | OpenClash 的 `filter` 只能单正则，做不出「未命中四地区」的排除式匹配 |
+| 段 3 Tailscale | 5 条（含 `.exe`） | **3 条** | 路由器是 Linux 不存在 `.exe`；当晚又删了进程规则（见下一节） |
+| 段 5 应用级分流 | 有（`PROCESS-NAME`） | **没有** | 路由器上对 LAN 客户端永不命中（`Only Works on Routerself`） |
+
+### 一次性校验（未纳入仓库）
+
+渲染后跑了静态校验：从产物里提取 `rule-providers` 名称集合、`proxy-groups` 名称集合、
+规则链里的 `RULE-SET` 引用与目标组引用，断言无悬空引用。结论：
+**13 个 provider / 11 个组 / 22 条规则，`BAD provider refs` / `BAD target refs` /
+`BAD proxies refs` 全为 `<none>`**。**这些校验不会随改动自动重跑。**
+
+### 连带更新
+
+- 新增 `targets/openclash-override-lite-1015.md` —— lite 产物的功能与规则说明
+- `README.md` —— 目录树补 OpenClash lite 两件套与 `profile-lite-openclash.yaml`；
+  新增「OpenClash 侧能力（两个产物）」对照表；常用改动表补 `profile-lite-openclash.yaml`；
+  顺带订正目录树里 `openclash-override-1002` 的后缀（`.sh` → `.conf`，
+  自 v1.2.0 起它已是单文件覆写模块而非自定义覆写脚本）
+- `docs/design.md` —— 第九节产物状态表补 OpenClash lite 行并订正后缀；补「另一客户端的 lite 产物」说明
+
+---
+
+## Tailscale UDP 直连改用防火墙层方案（2026-10-15 · 同日后续）
+
+### 触发
+
+参考外站文章 [Tailscale 与 OpenClash](https://blog.hex2rgb.top/posts/tailscale-openclash/)
+的讨论，复核了产物里那条 `PROCESS-NAME,tailscaled,DIRECT` 的可行性。
+
+### 结论：机理不成立，方案撤回
+
+那条规则本意是让 tailscaled 自己发出的 UDP 不走代理。问题**不在**进程匹配本身，
+而在**规则链的位置**：UDP 流量进入 mangle 表的 `openclash` 链时已被 mihomo 的 TPROXY
+接管，链内规则（含进程规则）只对首次连接生效，接不住这条流。
+所以它并非「未实测所以不确定」，而是**原理上不可能生效**。
+
+### 改动
+
+| 文件 | 改动 |
+|---|---|
+| `targets/openclash-override-1002.conf` | 内容版本 **v1.7.0 → v1.8.0**；删第 9 条 `PROCESS-NAME,tailscaled`；`FIND_PROCESS_MODE` `strict → off`；规模 53 → **52** 条 |
+| `targets/openclash-override-lite-1015.conf` | 内容版本 **v1.0.0 → v1.1.0**；删第 5 条同一规则；`FIND_PROCESS_MODE` `strict → off`；规模 23 → **22** 条 |
+| `rules/profile-lite-openclash.yaml` | `content_version` → v1.8.0；段 3 改为 3 条，行号映射整体前移 |
+| `rules/priorities.yaml` | 段 3 注释里「当前的实际差异」改为「曾经的差异（v1.8.0 已撤）」 |
+| `rulesets/OwnDIRECTRules.yaml` | UDP 注释改为指向防火墙层方案与「已知问题 10」 |
+| `targets/openclash-override-1002.md` / `-lite-1015.md` | 同步全部数字与段落；重写「已知问题 10」与「验证 Tailscale」排查步骤 |
+| `docs/openclash.md` | 第 7 节补「路由器自身的进程规则在 TPROXY 下同样不可靠」；风险分级表标注唯一有条件的例外 |
+| `README.md` / `docs/design.md` | 对照表数字 53 → 52、23 → 22；Tailscale 行去掉 `PROCESS-NAME` |
+
+规则段编号随之整体前移：全量段 3 变为 9-11、lite 段 3 变为 5-7，
+其后各段与文档里所有「第 N 条」引用都已同步。
+
+### 新方案（**尚未实测**）
+
+在 `openclash_custom_firewall_rules.sh` 里，于 mangle 表 `PREROUTING` / `OUTPUT` 的
+`TPROXY` **之前**插入 `RETURN`，匹配 `100.64.0.0/10` 与 UDP 3478 / 41641。
+脚本、插入位置、四步排查与回退方式见
+[`../targets/openclash-override-1002.md`](../targets/openclash-override-1002.md)「已知问题 10」。
+
+⚠️ 这打破了 `docs/openclash.md` 原先「本项目不碰防火墙脚本」的约定。风险等级不变
+（防火墙层出错会断网），但这是**唯一有条件的例外**，且随时可删掉脚本恢复。
+
+### 一次性校验
+
+- 全量：**52 条规则**（段 1-2 / 3-8 / 9-11 / 12-19 / 20 / 21-31 / 32-34 / 35-37 / 38-44 / 45-49 / 50 / 51-52）
+- lite：**22 条规则**（段 1-2 / 3-4 / 5-7 / 8-14 / 15 / 16 / 17-19 / 20 / 21-22）
+- 两个产物中都已无任何实际的 `PROCESS-NAME` 规则（`grep` 命中全部落在注释里）
+- 组数、规则集数、引用完整性不受本次改动影响

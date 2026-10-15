@@ -21,7 +21,7 @@
 
 - 生成内容**未经过完整的人工逐行审计**，可能存在逻辑缺陷、边界情况遗漏、错误注释或不合理的默认值。
 - 代码中的大量注释（如「与原实现一致」「踩过坑之后定下来的」）描述的是**设计意图**，而非经过验证的正确性证明。
-- 本项目**没有任何自动化测试或构建校验**，产物 `targets/flclash-override-1001.js` 的正确性完全依赖人工审阅。
+- 本项目**没有任何自动化测试或构建校验**，`targets/` 下四份产物（FlClash 全量 / lite、OpenClash 全量 / lite）的正确性完全依赖人工审阅。每次新增产物时做过哪些一次性校验、结论是什么，记在 [`docs/changelog.md`](docs/changelog.md) 对应条目里。
 - **请自行审阅全部代码后再使用。** 任何因直接采信本项目内容而产生的后果，由使用者自行承担。
 
 ### 三、第三方内容的版权与许可
@@ -68,11 +68,12 @@ net-routing/
 │   ├── filters.yaml            节点特征关键词
 │   ├── options.yaml            运行时开关（ipv6 / tun / 测速 / tailscale）
 │   ├── inline-rules.yaml       内嵌规则（不依赖外部 URL）
-│   └── profile-lite.yaml       lite 产物的裁剪白名单（保留哪些段 / 组 / 规则集）
+│   ├── profile-lite.yaml       FlClash lite 的裁剪白名单（保留哪些段 / 组 / 规则集）
+│   └── profile-lite-openclash.yaml  OpenClash lite 的裁剪白名单（另含删组后的引用清理清单）
 │
 ├── rulesets/                 ★ 日常改这里（客户端自动拉取，无需重新生成）
 │   ├── OwnDIRECTRules.yaml     → CustomDirectRules → DIRECT
-│   ├── OwnPROXYRules.yaml      → CustomProxyRules  → 📁 办公通讯
+│   ├── OwnPROXYRules.yaml      → CustomProxyRules  → 📁 办公通讯 / 🧭 代理模式（lite）
 │   └── OwnREJECTRules.yaml     → CustomRejectRules → ⛔ 广告拦截
 │
 ├── targets/
@@ -80,9 +81,11 @@ net-routing/
 │   ├── flclash-override-1001.md  ★ 全量版的功能与规则说明（改配置前先看这份）
 │   ├── flclash-override-lite-1014.js ★ 粘进 FlClash 的成品 · lite 轻量版
 │   ├── flclash-override-lite-1014.md ★ lite 版的功能与规则说明
-│   ├── openclash-override-1002.sh  ★ 贴进 LuCI 覆写模块的自定义覆写脚本（单文件全包）
-│   ├── openclash-override-1002.md ★ 路由器侧产物的功能与规则说明
-│   └── openclash-routes.yaml     · 路由器产物的数据源（可 diff，.sh 由它拼装）
+│   ├── openclash-override-1002.conf  ★ 上传到 LuCI 覆写模块 · 全量版（自包含单文件）
+│   ├── openclash-override-1002.md ★ 路由器侧全量版的功能与规则说明
+│   ├── openclash-override-lite-1015.conf ★ 上传到 LuCI 覆写模块 · lite 轻量版
+│   ├── openclash-override-lite-1015.md ★ 路由器侧 lite 版的功能与规则说明
+│   └── openclash-routes.yaml     · 路由器产物的数据源（可 diff）
 │
 ├── test/                      路由器侧的只读探针与验证脚本
 │   ├── openclash-probe.sh         · 环境与配置现状快照（纯只读）
@@ -103,6 +106,12 @@ net-routing/
 > 📖 **FlClash 有两个产物**：全量版什么都能调；lite 版少而稳（23 条规则 / 13 个规则集 /
 > 12 个策略组），说明见 [`targets/flclash-override-lite-1014.md`](targets/flclash-override-lite-1014.md)。
 > 两者的差异集中在 [`rules/profile-lite.yaml`](rules/profile-lite.yaml)。
+>
+> 📖 **OpenClash 也有两个产物**：全量版 `openclash-override-1002.conf`；lite 版少而稳
+> （22 条规则 / 13 个规则集 / 11 个策略组），说明见
+> [`targets/openclash-override-lite-1015.md`](targets/openclash-override-lite-1015.md)。
+> 两者的差异集中在 [`rules/profile-lite-openclash.yaml`](rules/profile-lite-openclash.yaml)。
+> ⚠️ 这两个覆写模块**不能同时启用**（都有 `[YAML]` 块；OpenClash 对多个模块是**依次合并**，不是后者覆盖前者）。
 >
 > 📌 **产物文件名带日期大版本**（`flclash-override-1001.js` = 2026-10-01 立项）。
 > 日常小改动直接改这个文件、文件名不变；只有**重大结构调整**才以当天日期另存为新大版本。详见
@@ -202,13 +211,39 @@ LuCI 的「覆写模块」即可，两端共用 `rules/*.yaml` 这一层规则�
 - IPv6 泄露封堵（三层）
 - 测速按需触发（`lazy`），降低移动端耗电
 
+### OpenClash 侧能力（两个产物）
+
+同一套思路用在路由器上，但两份覆写模块**不能同时启用**：
+
+| 能力 | `openclash-override-1002.conf`（全量） | `openclash-override-lite-1015.conf`（lite） |
+|---|---|---|
+| 分流规则 | 52 | **22** |
+| 规则集 | 43 | **13** |
+| 策略组 | 22 | **11** |
+| 地区组 | 港 / 新 / 日 / 美 / 英 / 台 | **港 / 新 / 日 / 美**（无「🌐 其他地区」） |
+| 服务组 | 办公通讯 / AI / 谷歌 / 游戏 / 大流量 | **AI / 广告拦截** |
+| 兜底 | `MATCH` → `🌍 兜底代理` → `🧭 代理模式` | `MATCH` → `🧭 代理模式`（少一跳） |
+| 「🧭 代理模式」含 `REJECT` 选项 | 有（**断网级隐患**） | ✗（已删，同时删掉两个目标组已不存在的选项） |
+| 应用级分流 / 进程规则 | 无（路由器上对 LAN 客户端永不命中） | 无 |
+| Tailscale | 规则直连（`IP-CIDR` + `ts.net`）；UDP 打洞靠防火墙层脚本 | 相同 |
+
+两者共有的能力：
+
+- 13 本第三方规则集走 GitHub CDN（`GITHUB_ADDRESS_MOD`）
+- DNS 修好订阅自带的坏 `fallback`，国际 DoH 穿隧道（`respect-rules: true`）
+- fake-ip-filter 追加 22 条（局域网发现 / MagicDNS / NTP / IoT / 银行）
+- 自托管规则集（`rulesets/Own*.yaml`）与 FlClash 侧共用同一份
+
+> ⚠️ **切换产物时必须先停用另一个模块并重载。** 详见
+> [`targets/openclash-override-lite-1015.md`](targets/openclash-override-lite-1015.md) 第一节。
+
 ---
 
 ## 常用改动
 
 | 想改什么 | 改哪个文件 | 需要重新生成产物？ |
 |---|---|---|
-| 加一条自己的分流规则 | `rulesets/*.yaml` | **不用** —— 提交推送后客户端自动拉取 |
+| 加一条自己的分流规则 | `rulesets/*.yaml` | **不用** —— 提交推送后客户端自动拉取（四份产物共用） |
 | 换规则集源、改更新间隔 | `rules/providers.yaml` | ✅ 需要 |
 | 调整规则顺序 / 改分流目标 | `rules/priorities.yaml` | ✅ 需要 |
 | 增删策略组、改组名 | `rules/groups.yaml` | ✅ 需要 |
@@ -216,12 +251,13 @@ LuCI 的「覆写模块」即可，两端共用 `rules/*.yaml` 这一层规则�
 | 改通知/家宽/低倍率的关键词 | `rules/filters.yaml` | ✅ 需要 |
 | 改测速间隔、IPv6、TUN、mtu、Tailscale | `rules/options.yaml` | ✅ 需要 |
 | 改内嵌规则（npm 等） | `rules/inline-rules.yaml` | ✅ 需要 |
-| 调整 lite 的裁剪范围（保留哪些段 / 组 / 规则集） | `rules/profile-lite.yaml` | ✅ 需要（重新生成 **lite** 产物） |
+| 调整 FlClash lite 的裁剪范围（保留哪些段 / 组 / 规则集） | `rules/profile-lite.yaml` | ✅ 需要（重新生成 **FlClash lite**） |
+| 调整 OpenClash lite 的裁剪范围 / 删组后的引用清理 | `rules/profile-lite-openclash.yaml` | ✅ 需要（重新生成 **OpenClash lite**） |
 
 **两类改动的区别很重要**：
 
-- 改 `rulesets/*.yaml` —— 只提交推送即可，客户端按 `interval: 86400`（24 小时）自动拉取，**不用碰 `targets/flclash-override-1001.js`**。这是日常最常用的入口。
-- 改 `rules/*.yaml` —— 只是改了「事实来源」，**产物不会自动同步**。必须让 AI 依据 YAML 重新生成 `targets/flclash-override-1001.js`（若改的是 `rules/profile-lite.yaml`，则重新生成 `targets/flclash-override-lite-1014.js`），再粘回 FlClash 才生效。
+- 改 `rulesets/*.yaml` —— 只提交推送即可，客户端按 `interval: 86400`（24 小时）自动拉取，**不用碰 `targets/` 下任何产物**。这是日常最常用的入口，四份产物全都受益。
+- 改 `rules/*.yaml` —— 只是改了「事实来源」，**产物不会自动同步**。必须让 AI 依据 YAML 重新生成产物：改 `rules/profile-lite.yaml` → 重新生成 `targets/flclash-override-lite-1014.js`；改 `rules/profile-lite-openclash.yaml` → 重新生成 `targets/openclash-override-lite-1015.conf`；改其它 `rules/*.yaml` 则四份产物都要重新渲染。
 
 ---
 
@@ -312,10 +348,15 @@ LuCI 的「覆写模块」即可，两端共用 `rules/*.yaml` 这一层规则�
 
 > ✅ **lite 产物不存在此问题**：`flclash-override-lite-1014.js` 取消了家宽 / 低倍率判定，
 > 这类节点与普通节点同等参与地区归属，会正常出现在对应地区组里。
+>
+> ✅ **OpenClash 侧同样不存在此问题**：路由器版的节点分类由内核按 `filter` 正则完成，
+> 没有「特殊节点排除出地区组」这层逻辑。`openclash-override-lite-1015.conf` 还直接删掉了
+> 「🏠 家宽/原生线路」组（全量实测 `filter: '家宽'` 命中 0 个节点），
+> 家宽节点在 4 个地区组的 `filter` 里正常参与匹配。
 
 ### 3. 规则集命名容易误解
 
-provider 名中的 `_ip` / `_no_ip` 后缀表示的是**该规则集的内容类型**（含 IP 规则 / 纯域名规则），**不是** mihomo 的 `no-resolve` 参数。当前 54 条规则中只有 3 条真正带 `no-resolve`，且均为内联的 `IP-CIDR` / `GEOIP` 规则（lite 版 23 条规则中同样是这 3 条：两条 Tailscale 的 `IP-CIDR` 与 `GEOIP,private`）。
+provider 名中的 `_ip` / `_no_ip` 后缀表示的是**该规则集的内容类型**（含 IP 规则 / 纯域名规则），**不是** mihomo 的 `no-resolve` 参数。FlClash 全量产物当前 54 条规则中只有 3 条真正带 `no-resolve`，且均为内联的 `IP-CIDR` / `GEOIP` 规则。**其余三份产物（两个 lite 与 OpenClash 全量）同样是这 3 条** —— 分别是 Tailscale 段的两条 `IP-CIDR` 与 `GEOIP,private`。
 
 ---
 
